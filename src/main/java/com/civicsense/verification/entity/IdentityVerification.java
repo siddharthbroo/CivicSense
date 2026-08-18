@@ -23,8 +23,10 @@ public class IdentityVerification {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
+    // IdentityVerification mein: user mandatory hai. lekin User document upload ke time exist nahi karta.
+    // Identity verification ko initially registration session se associate karna better hai, User se nahi.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
     private User user;
 
     @Enumerated(EnumType.STRING)
@@ -45,6 +47,15 @@ public class IdentityVerification {
 
     @Column(name = "extracted_gender")
     private String extractedGender;
+
+    @Column(name = "confirmed_name")
+    private String confirmedName;
+
+    @Column(name = "confirmed_dob")
+    private LocalDate confirmedDob;
+
+    @Column(name = "confirmed_gender")
+    private String confirmedGender;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "ocr_status", nullable = false)
