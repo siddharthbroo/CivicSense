@@ -1,6 +1,7 @@
 package com.civicsense.otp.entity;
 
 import com.civicsense.user.entity.User;
+import com.civicsense.verification.entity.IdentityVerification;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,13 +23,29 @@ public class OtpVerification {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /*
+     * User may not exist during registration.
+     * It will be linked later after successful OTP verification
+     * and user creation.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
+    /*
+     * Links this OTP to the current identity verification/registration flow.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "identity_verification_id", nullable = false)
+    private IdentityVerification identityVerification;
+
     @Column(name = "mobile_number", nullable = false)
     private String mobileNumber;
 
+    /*
+     * Never store the actual OTP.
+     * Only the hashed value is stored.
+     */
     @Column(name = "otp_hash", nullable = false)
     private String otpHash;
 

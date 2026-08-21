@@ -11,7 +11,9 @@ import java.util.UUID;
 public interface OtpVerificationRepository
         extends JpaRepository<OtpVerification, UUID> {
 
-    Optional<OtpVerification> findTopByMobileNumberAndPurposeAndStatusOrderByCreatedAtDesc(
+    Optional<OtpVerification>
+    findTopByIdentityVerificationIdAndMobileNumberAndPurposeAndStatusOrderByCreatedAtDesc(
+            UUID identityVerificationId,
             String mobileNumber,
             OtpPurpose purpose,
             OtpStatus status
