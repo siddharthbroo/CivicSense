@@ -32,6 +32,7 @@ public class OtpController {
             @RequestBody VerifyOtpRequest request
     ) {
 
+
         VerifyOtpResponse response =
                 otpService.verifyOtp(request);
 
