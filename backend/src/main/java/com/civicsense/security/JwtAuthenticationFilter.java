@@ -41,7 +41,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String authorizationHeader =
                 request.getHeader("Authorization");
 
-        System.out.println("AUTH HEADER = " + authorizationHeader);
 
         // No Authorization header
         if (authorizationHeader == null ||
@@ -57,7 +56,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token =
                 authorizationHeader.substring(7);
 
-        System.out.println("TOKEN RECEIVED = " + token);
 
         // Validate JWT
         if (!jwtService.isTokenValid(token)) {

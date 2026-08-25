@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* CSS Reset & Setup */
+*{
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    min-height: 100vh;
+    line-height: 1.5;
+    font-family: sans-serif;
+}
