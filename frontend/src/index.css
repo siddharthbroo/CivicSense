@@ -1,17 +1,98 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* CSS Reset & Setup */
-*{
-    box-sizing: border-box;
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-slate-25 text-slate-800 font-sans;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-navy-900;
+  }
+
+  /* Consistent, visible keyboard focus across the app */
+  :focus-visible {
+    outline: 2px solid theme('colors.teal.500');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
 }
 
-html {
-    font-size: 16px;
-    scroll-behavior: smooth;
-}
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60;
+  }
 
-body {
-    min-height: 100vh;
-    line-height: 1.5;
-    font-family: sans-serif;
+  .btn-primary {
+    @apply btn bg-navy-800 text-white hover:bg-navy-900 focus-visible:outline-teal-500;
+  }
+
+  .btn-accent {
+    @apply btn bg-teal-600 text-white hover:bg-teal-700;
+  }
+
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .input-field {
+    @apply w-full rounded border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:bg-slate-50 disabled:text-slate-400;
+  }
+
+  .input-field-error {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-500;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-red-600;
+  }
+
+  .card {
+    @apply rounded-lg border border-slate-200 bg-white shadow-card;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+
+  .badge-verified {
+    @apply badge bg-green-50 text-green-700 ring-1 ring-inset ring-green-200;
+  }
+
+  .badge-pending {
+    @apply badge bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200;
+  }
+
+  .badge-error {
+    @apply badge bg-red-50 text-red-700 ring-1 ring-inset ring-red-200;
+  }
+
+  .badge-role {
+    @apply badge bg-navy-50 text-navy-700 ring-1 ring-inset ring-navy-200;
+  }
 }
