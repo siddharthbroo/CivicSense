@@ -5,7 +5,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 
-@Service
+
 public class MockOcrService implements OcrService {
 
     @Override

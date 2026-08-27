@@ -30,6 +30,7 @@ export default function MobileVerification() {
 
     const validationError = validateMobileNumber(mobileNumber)
     setError(validationError)
+
     if (validationError) return
 
     setIsSubmitting(true)

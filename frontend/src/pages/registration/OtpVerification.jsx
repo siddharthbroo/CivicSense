@@ -47,12 +47,11 @@ export default function OtpVerification() {
       })
 
       if (!result.verified) {
-        setServerError(result.message || 'Invalid OTP')
+        setServerError(result.message)
         return
       }
 
       navigate('/register/password')
-
     } catch (err) {
       setServerError(err.message)
     } finally {
@@ -75,6 +74,13 @@ export default function OtpVerification() {
       })
 
       restart()
+
+      // New OTP request creates a new OTP verification record.
+      // Store its ID for the next verification attempt.
+      // Note: updateData is intentionally not destructured above yet.
+      console.log(result)
+
+      restart()
     } catch (err) {
       setServerError(err.message)
     } finally {
@@ -86,7 +92,9 @@ export default function OtpVerification() {
     <AuthLayout
       eyebrow="Step 4 of 5"
       title="Enter verification code"
-      subtitle={`Sent to your mobile number ending in ${data.mobileNumber?.slice(-4) || '••••'}`}
+      subtitle={`Sent to your mobile number ending in ${
+        data.mobileNumber?.slice(-4) || '••••'
+      }`}
     >
       <StepIndicator currentStep="otp" />
 
