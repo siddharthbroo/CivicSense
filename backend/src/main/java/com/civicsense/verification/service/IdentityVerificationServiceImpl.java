@@ -19,6 +19,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class IdentityVerificationServiceImpl
         implements IdentityVerificationService {
 
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024;
+
     private final OcrService ocrService;
     private final IdentityVerificationRepository identityVerificationRepository;
 
@@ -28,32 +30,56 @@ public class IdentityVerificationServiceImpl
             DocumentType documentType
     ) {
 
-        // 1. Process document using OCR
-        OcrResult ocrResult = ocrService.extractDetails(document);
+        // 1. Validate uploaded file
+        validateDocument(document);
 
-        // 2. Create identity verification record
-        IdentityVerification verification = new IdentityVerification();
+        // 2. Only Aadhaar is currently supported
+        if (documentType != DocumentType.AADHAAR) {
+            throw new IllegalArgumentException(
+                    "Only Aadhaar documents are currently supported"
+            );
+        }
+
+        // 3. Process document using OCR
+        OcrResult ocrResult =
+                ocrService.extractDetails(document);
+
+        // 4. Create identity verification record
+        IdentityVerification verification =
+                new IdentityVerification();
 
         verification.setDocumentType(documentType);
 
         // Store original OCR output
-        verification.setExtractedName(ocrResult.name());
-        verification.setExtractedDob(ocrResult.dateOfBirth());
-        verification.setExtractedGender(ocrResult.gender());
+        verification.setExtractedName(
+                ocrResult.name()
+        );
+
+        verification.setExtractedDob(
+                ocrResult.dateOfBirth()
+        );
+
+        verification.setExtractedGender(
+                ocrResult.gender()
+        );
 
         // OCR completed successfully
-        verification.setOcrStatus(OCRStatus.COMPLETED);
+        verification.setOcrStatus(
+                OCRStatus.COMPLETED
+        );
 
         // User has not reviewed the OCR data yet
         verification.setVerificationStatus(
                 VerificationStatus.PENDING
         );
 
-        // 3. Save verification record
+        // 5. Save verification record
         IdentityVerification savedVerification =
-                identityVerificationRepository.save(verification);
+                identityVerificationRepository.save(
+                        verification
+                );
 
-        // 4. Return OCR result to frontend
+        // 6. Return OCR result to frontend
         return new IdentityDocumentUploadResponse(
                 savedVerification.getId(),
                 savedVerification.getDocumentType().name(),
@@ -69,7 +95,7 @@ public class IdentityVerificationServiceImpl
             IdentityConfirmationRequest request
     ) {
 
-        // 1. Find the identity verification record
+        // 1. Find identity verification record
         IdentityVerification verification =
                 identityVerificationRepository.findById(
                         request.verificationId()
@@ -79,21 +105,30 @@ public class IdentityVerificationServiceImpl
                         )
                 );
 
-        // 2. Save the details reviewed/edited by the user
-        // Do NOT overwrite the original OCR result.
-        verification.setConfirmedName(request.name());
-        verification.setConfirmedDob(request.dateOfBirth());
-        verification.setConfirmedGender(request.gender());
+        // 2. Save user-confirmed details
+        // Do NOT overwrite original OCR result.
+        verification.setConfirmedName(
+                request.name()
+        );
 
-        // 3. User has reviewed and submitted the details.
-        // This does NOT mean government/third-party verification is complete.
+        verification.setConfirmedDob(
+                request.dateOfBirth()
+        );
+
+        verification.setConfirmedGender(
+                request.gender()
+        );
+
+        // 3. User has reviewed and confirmed the details
         verification.setVerificationStatus(
                 VerificationStatus.USER_CONFIRMED
         );
 
         // 4. Save updated verification record
         IdentityVerification savedVerification =
-                identityVerificationRepository.save(verification);
+                identityVerificationRepository.save(
+                        verification
+                );
 
         // 5. Return confirmation response
         return new IdentityVerificationResponse(
@@ -102,5 +137,32 @@ public class IdentityVerificationServiceImpl
                 savedVerification.getVerificationStatus(),
                 "Identity details confirmed successfully"
         );
+    }
+
+    private void validateDocument(MultipartFile document) {
+
+        if (document == null || document.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Document file is required"
+            );
+        }
+
+        if (document.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException(
+                    "Document size must not exceed 5 MB"
+            );
+        }
+
+        String contentType =
+                document.getContentType();
+
+        if (contentType == null ||
+                (!contentType.equalsIgnoreCase("image/jpeg")
+                        && !contentType.equalsIgnoreCase("image/png"))) {
+
+            throw new IllegalArgumentException(
+                    "Only JPG, JPEG and PNG images are supported"
+            );
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.civicsense.otp.dto.SendOtpResponse;
 import com.civicsense.otp.dto.VerifyOtpRequest;
 import com.civicsense.otp.dto.VerifyOtpResponse;
 import com.civicsense.otp.service.OtpService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,7 +19,7 @@ public class OtpController {
 
     @PostMapping("/send")
     public ResponseEntity<SendOtpResponse> sendOtp(
-            @RequestBody SendOtpRequest request
+            @Valid @RequestBody SendOtpRequest request
     ) {
 
         SendOtpResponse response =
@@ -29,9 +30,8 @@ public class OtpController {
 
     @PostMapping("/verify")
     public ResponseEntity<VerifyOtpResponse> verifyOtp(
-            @RequestBody VerifyOtpRequest request
+            @Valid @RequestBody VerifyOtpRequest request
     ) {
-
 
         VerifyOtpResponse response =
                 otpService.verifyOtp(request);

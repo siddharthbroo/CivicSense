@@ -5,6 +5,7 @@ import com.civicsense.verification.dto.IdentityDocumentUploadResponse;
 import com.civicsense.verification.dto.IdentityVerificationResponse;
 import com.civicsense.verification.entity.DocumentType;
 import com.civicsense.verification.service.IdentityVerificationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,7 +42,7 @@ public class IdentityVerificationController {
 
     @PostMapping("/confirm")
     public ResponseEntity<IdentityVerificationResponse> confirmIdentity(
-            @RequestBody IdentityConfirmationRequest request
+            @Valid @RequestBody IdentityConfirmationRequest request
     ) {
 
         IdentityVerificationResponse response =

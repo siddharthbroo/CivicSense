@@ -13,6 +13,7 @@ import com.civicsense.verification.entity.VerificationStatus;
 import com.civicsense.verification.repository.IdentityVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -24,6 +25,7 @@ public class OtpServiceImpl implements OtpService {
     private static final int OTP_MIN = 100000;
     private static final int OTP_MAX = 999999;
     private static final int OTP_EXPIRY_MINUTES = 5;
+    private static final int MAX_ATTEMPTS = 5;
 
     private final OtpVerificationRepository otpVerificationRepository;
     private final IdentityVerificationRepository identityVerificationRepository;
@@ -32,7 +34,10 @@ public class OtpServiceImpl implements OtpService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
-    public SendOtpResponse sendOtp(SendOtpRequest request) {
+    @Transactional
+    public SendOtpResponse sendOtp(
+            SendOtpRequest request
+    ) {
 
         // 1. Find the identity verification process
         IdentityVerification verification =
@@ -44,7 +49,7 @@ public class OtpServiceImpl implements OtpService {
                         )
                 );
 
-        // 2. User must have confirmed the identity details first
+        // 2. Identity details must have been confirmed first
         if (verification.getVerificationStatus()
                 != VerificationStatus.USER_CONFIRMED) {
 
@@ -53,33 +58,69 @@ public class OtpServiceImpl implements OtpService {
             );
         }
 
-        // 3. Generate secure 6-digit OTP
+        /*
+         * 3. Invalidate all previously active OTPs
+         * for this identity verification and mobile number.
+         *
+         * This is important when the user clicks "Resend OTP".
+         * The old OTP must no longer be usable.
+         */
+        otpVerificationRepository.updateStatusForActiveOtps(
+                request.identityVerificationId(),
+                request.mobileNumber(),
+                OtpPurpose.REGISTRATION,
+                OtpStatus.PENDING,
+                OtpStatus.EXPIRED
+        );
+
+        // 4. Generate secure 6-digit OTP
         String otp = generateOtp();
 
-        // 4. Hash OTP before storing it
+        // 5. Hash OTP before storing it
         String otpHash = otpHasher.hash(otp);
 
-        // 5. Set expiry time
+        // 6. Set expiry time
         LocalDateTime expiresAt =
-                LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+                LocalDateTime.now()
+                        .plusMinutes(OTP_EXPIRY_MINUTES);
 
-        // 6. Create OTP record
+        // 7. Create OTP record
         OtpVerification otpVerification =
                 new OtpVerification();
 
-        otpVerification.setIdentityVerification(verification);
-        otpVerification.setMobileNumber(request.mobileNumber());
-        otpVerification.setOtpHash(otpHash);
-        otpVerification.setPurpose(OtpPurpose.REGISTRATION);
-        otpVerification.setStatus(OtpStatus.PENDING);
-        otpVerification.setExpiresAt(expiresAt);
+        otpVerification.setIdentityVerification(
+                verification
+        );
+
+        otpVerification.setMobileNumber(
+                request.mobileNumber()
+        );
+
+        otpVerification.setOtpHash(
+                otpHash
+        );
+
+        otpVerification.setPurpose(
+                OtpPurpose.REGISTRATION
+        );
+
+        otpVerification.setStatus(
+                OtpStatus.PENDING
+        );
+
+        otpVerification.setExpiresAt(
+                expiresAt
+        );
+
         otpVerification.setAttemptCount(0);
 
-        // 7. Save OTP
+        // 8. Save OTP
         OtpVerification savedOtp =
-                otpVerificationRepository.save(otpVerification);
+                otpVerificationRepository.save(
+                        otpVerification
+                );
 
-        // 8. Development only
+        // 9. Development only
         System.out.println(
                 "========================================"
         );
@@ -96,7 +137,7 @@ public class OtpServiceImpl implements OtpService {
                 "========================================"
         );
 
-        // 9. Never return the actual OTP in API response
+        // 10. Never return actual OTP in API response
         return new SendOtpResponse(
                 savedOtp.getId(),
                 savedOtp.getExpiresAt(),
@@ -105,11 +146,12 @@ public class OtpServiceImpl implements OtpService {
     }
 
     @Override
+    @Transactional
     public VerifyOtpResponse verifyOtp(
             VerifyOtpRequest request
     ) {
 
-        // 1. Find the OTP verification record
+        // 1. Find OTP verification record
         OtpVerification otpVerification =
                 otpVerificationRepository.findById(
                         request.otpVerificationId()
@@ -120,7 +162,8 @@ public class OtpServiceImpl implements OtpService {
                 );
 
         // 2. OTP must still be pending
-        if (otpVerification.getStatus() != OtpStatus.PENDING) {
+        if (otpVerification.getStatus()
+                != OtpStatus.PENDING) {
 
             return new VerifyOtpResponse(
                     false,
@@ -132,9 +175,13 @@ public class OtpServiceImpl implements OtpService {
         if (LocalDateTime.now()
                 .isAfter(otpVerification.getExpiresAt())) {
 
-            otpVerification.setStatus(OtpStatus.EXPIRED);
+            otpVerification.setStatus(
+                    OtpStatus.EXPIRED
+            );
 
-            otpVerificationRepository.save(otpVerification);
+            otpVerificationRepository.save(
+                    otpVerification
+            );
 
             return new VerifyOtpResponse(
                     false,
@@ -143,11 +190,16 @@ public class OtpServiceImpl implements OtpService {
         }
 
         // 4. Check maximum attempts
-        if (otpVerification.getAttemptCount() >= 5) {
+        if (otpVerification.getAttemptCount()
+                >= MAX_ATTEMPTS) {
 
-            otpVerification.setStatus(OtpStatus.FAILED);
+            otpVerification.setStatus(
+                    OtpStatus.FAILED
+            );
 
-            otpVerificationRepository.save(otpVerification);
+            otpVerificationRepository.save(
+                    otpVerification
+            );
 
             return new VerifyOtpResponse(
                     false,
@@ -170,11 +222,17 @@ public class OtpServiceImpl implements OtpService {
         // 7. Wrong OTP
         if (!matches) {
 
-            if (otpVerification.getAttemptCount() >= 5) {
-                otpVerification.setStatus(OtpStatus.FAILED);
+            if (otpVerification.getAttemptCount()
+                    >= MAX_ATTEMPTS) {
+
+                otpVerification.setStatus(
+                        OtpStatus.FAILED
+                );
             }
 
-            otpVerificationRepository.save(otpVerification);
+            otpVerificationRepository.save(
+                    otpVerification
+            );
 
             return new VerifyOtpResponse(
                     false,
@@ -183,10 +241,17 @@ public class OtpServiceImpl implements OtpService {
         }
 
         // 8. Correct OTP
-        otpVerification.setStatus(OtpStatus.VERIFIED);
-        otpVerification.setVerifiedAt(LocalDateTime.now());
+        otpVerification.setStatus(
+                OtpStatus.VERIFIED
+        );
 
-        otpVerificationRepository.save(otpVerification);
+        otpVerification.setVerifiedAt(
+                LocalDateTime.now()
+        );
+
+        otpVerificationRepository.save(
+                otpVerification
+        );
 
         return new VerifyOtpResponse(
                 true,
@@ -196,9 +261,10 @@ public class OtpServiceImpl implements OtpService {
 
     private String generateOtp() {
 
-        int otp = secureRandom.nextInt(
-                OTP_MAX - OTP_MIN + 1
-        ) + OTP_MIN;
+        int otp =
+                secureRandom.nextInt(
+                        OTP_MAX - OTP_MIN + 1
+                ) + OTP_MIN;
 
         return String.valueOf(otp);
     }
