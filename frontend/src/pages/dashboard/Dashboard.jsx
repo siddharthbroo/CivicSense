@@ -1,14 +1,7 @@
 import { useAuth } from '../../context/AuthContext.jsx'
+import CitizenDashboard from './CitizenDashboard.jsx'
 
 const ROLE_CONTENT = {
-  CITIZEN: {
-    heading: 'Citizen dashboard',
-    description: 'File new complaints and track the ones you have already reported.',
-    cards: [
-      { title: 'File a complaint', body: 'Report a civic issue in your zone.' },
-      { title: 'My complaints', body: 'Track the status of complaints you have submitted.' },
-    ],
-  },
   OFFICER: {
     heading: 'Officer dashboard',
     description: 'Review complaints assigned to you and update their status.',
@@ -28,13 +21,19 @@ const ROLE_CONTENT = {
 }
 
 /**
- * A single dashboard component that adapts its content by role. This
- * is a UI-level convenience only; no complaint-management APIs exist
- * yet, so the cards below are placeholders rather than live features.
+ * Route-level dashboard container. For citizens, renders the full-featured
+ * CitizenDashboard connected to the complaint API. For officer/admin roles,
+ * displays their respective dashboards or placeholders.
  */
 export default function Dashboard() {
   const { user, role } = useAuth()
-  const content = ROLE_CONTENT[role] || ROLE_CONTENT.CITIZEN
+
+  // Citizens get the full complaint dashboard
+  if (!role || role === 'CITIZEN') {
+    return <CitizenDashboard />
+  }
+
+  const content = ROLE_CONTENT[role] || ROLE_CONTENT.OFFICER
 
   return (
     <div>
@@ -56,11 +55,10 @@ export default function Dashboard() {
       <div className="card p-5">
         <h2 className="text-base font-semibold text-navy-800">{content.heading}</h2>
         <p className="mt-1.5 text-sm text-slate-500">
-          This dashboard will populate once the corresponding complaint-management APIs are
-          available from the backend. The account layer — login, registration, JWT handling,
-          and role-based routing — is fully wired end-to-end.
+          This dashboard will populate once the officer/admin management APIs are available from the backend.
         </p>
       </div>
     </div>
   )
 }
+

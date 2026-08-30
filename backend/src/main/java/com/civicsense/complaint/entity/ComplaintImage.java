@@ -43,6 +43,9 @@ public class ComplaintImage {
     @Column(length = 255)
     private String storageKey;
 
+    @Column(nullable = false, length = 100)
+    private String contentType;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

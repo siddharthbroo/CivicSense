@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.civicsense.complaint.service.ai.AiAnalysisService;
 
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final ComplaintImageRepository complaintImageRepository;
     private final UserRepository userRepository;
     private final ImageKitService imageKitService;
+    private final AiAnalysisService aiAnalysisService;
 
     @Override
     @Transactional
@@ -78,9 +80,17 @@ public class ComplaintServiceImpl implements ComplaintService {
         complaintImage.setStorageKey(
                 uploadResult.storageKey()
         );
+        complaintImage.setContentType(
+                image.getContentType()
+        );
 
         // 7. Save image reference
         complaintImageRepository.save(complaintImage);
+
+        aiAnalysisService.analyze(
+                savedComplaint,
+                complaintImage
+        );
 
         // 8. Return response
         return new CreateComplaintResponse(
