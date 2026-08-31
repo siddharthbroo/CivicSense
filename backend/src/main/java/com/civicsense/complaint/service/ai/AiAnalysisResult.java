@@ -1,21 +1,28 @@
 package com.civicsense.complaint.service.ai;
 
+import com.civicsense.complaint.entity.ComplaintCategory;
+import com.civicsense.complaint.entity.ComplaintDepartment;
+import com.civicsense.complaint.entity.ComplaintSeverity;
+import com.civicsense.complaint.entity.DescriptionImageConsistency;
+import com.civicsense.complaint.entity.ImageAuthenticity;
+
 public record AiAnalysisResult(
 
         String language,
 
-        String category,
+        ComplaintCategory category,
 
-        String severity,
+        ComplaintSeverity severity,
 
         String summary,
 
-        String department,
+        ComplaintDepartment department,
 
         double confidence,
 
-        String imageAuthenticity,
+        ImageAuthenticity imageAuthenticity,
 
-        String descriptionImageConsistency
+        DescriptionImageConsistency descriptionImageConsistency
+
 ) {
 }

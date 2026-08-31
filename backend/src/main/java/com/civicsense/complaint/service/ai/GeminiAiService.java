@@ -1,7 +1,6 @@
 package com.civicsense.complaint.service.ai;
 
-import com.civicsense.complaint.entity.Complaint;
-import com.civicsense.complaint.entity.ComplaintImage;
+import com.civicsense.complaint.entity.*;
 import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
@@ -10,6 +9,9 @@ import com.google.genai.types.Part;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,41 +40,101 @@ public class GeminiAiService {
             );
         }
 
+        String categories =
+                Arrays.stream(ComplaintCategory.values())
+                        .map(Enum::name)
+                        .collect(Collectors.joining(", "));
+
+        String severities =
+                Arrays.stream(ComplaintSeverity.values())
+                        .map(Enum::name)
+                        .collect(Collectors.joining(", "));
+
+        String departments =
+                Arrays.stream(ComplaintDepartment.values())
+                        .map(Enum::name)
+                        .collect(Collectors.joining(", "));
+
+        String authenticities =
+                Arrays.stream(ImageAuthenticity.values())
+                        .map(Enum::name)
+                        .collect(Collectors.joining(", "));
+
+        String consistencies =
+                Arrays.stream(DescriptionImageConsistency.values())
+                        .map(Enum::name)
+                        .collect(Collectors.joining(", "));
+
+
         // 2. Prepare prompt
         String prompt = """
-                Analyze this civic complaint using BOTH the
-                complaint description and the uploaded image.
+        Analyze this civic complaint using BOTH the
+        complaint description and the uploaded image.
 
-                Complaint description:
-                %s
+        Complaint description:
+        %s
 
-                Analyze:
+        Analyze:
 
-                1. Detect the language.
-                2. Classify the complaint category.
-                3. Determine severity.
-                4. Create a short summary.
-                5. Recommend the responsible department.
-                6. Give a confidence score between 0 and 1.
-                7. Assess whether the image appears likely real,
-                   suspicious, or uncertain.
-                8. Check whether the image is consistent with
-                   the complaint description.
+        1. Detect the language.
+        2. Classify the complaint category.
+        3. Determine severity.
+        4. Create a short summary.
+        5. Recommend the responsible civic department.
+        6. Give a confidence score between 0 and 1.
+        7. Assess whether the image appears likely real,
+           suspicious, or uncertain.
+        8. Check whether the image is consistent with
+           the complaint description.
 
-                Return ONLY valid JSON.
+        CATEGORY:
+        The category MUST be exactly ONE of:
+        %s
 
-                Required JSON fields:
+        SEVERITY:
+        The severity MUST be exactly ONE of:
+        %s
 
-                language
-                category
-                severity
-                summary
-                department
-                confidence
-                imageAuthenticity
-                descriptionImageConsistency
-                """.formatted(
-                complaint.getDescription()
+        DEPARTMENT:
+        The department MUST be exactly ONE of:
+        %s
+
+        IMAGE AUTHENTICITY:
+        The imageAuthenticity MUST be exactly ONE of:
+        %s
+
+        DESCRIPTION-IMAGE CONSISTENCY:
+        The descriptionImageConsistency MUST be exactly ONE of:
+        %s
+
+        IMPORTANT:
+        - Do not create new category values.
+        - Do not create new severity values.
+        - Do not create new department values.
+        - Do not create new authenticity values.
+        - Do not create new consistency values.
+        - Use the values exactly as provided.
+        - confidence must be a number between 0 and 1.
+        - Return ONLY valid JSON.
+        - Do not wrap the JSON in markdown or code fences.
+
+        Required JSON fields:
+
+        language
+        category
+        severity
+        summary
+        department
+        confidence
+        imageAuthenticity
+        descriptionImageConsistency
+        """.formatted(
+                complaint.getDescription(),
+                categories,
+                severities,
+                departments,
+                authenticities,
+                consistencies
         );
 
         // 3. Create multimodal content
@@ -88,7 +150,7 @@ public class GeminiAiService {
         // 4. Send to Gemini
         GenerateContentResponse response =
                 geminiClient.models.generateContent(
-                        "gemini-2.5-flash",
+                        "gemini-3.6-flash",
                         content,
                         GenerateContentConfig.builder()
                                 .responseMimeType(

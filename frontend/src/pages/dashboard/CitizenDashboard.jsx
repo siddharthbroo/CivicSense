@@ -1,40 +1,56 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import ComplaintStats from '../../components/complaint/ComplaintStats.jsx'
 import ComplaintForm from '../../components/complaint/ComplaintForm.jsx'
 import ComplaintList from '../../components/complaint/ComplaintList.jsx'
 import CivicGuidelines from '../../components/complaint/CivicGuidelines.jsx'
 import ComplaintSuccessModal from '../../components/complaint/ComplaintSuccessModal.jsx'
+import Spinner from '../../components/common/Spinner.jsx'
+import Alert from '../../components/common/Alert.jsx'
+import { getMyComplaints } from '../../api/complaintApi.js'
 
 export default function CitizenDashboard() {
   const { user } = useAuth()
-  const storageKey = `civicsense_complaints_${user?.mobileNumber || 'citizen'}`
 
-  // Load persisted complaints for this citizen
-  const [complaints, setComplaints] = useState(() => {
-    try {
-      const saved = localStorage.getItem(storageKey)
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
-
+  const [complaints, setComplaints] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('form') // 'form' | 'list' | 'guidelines'
   const [newlyCreatedComplaint, setNewlyCreatedComplaint] = useState(null)
 
-  // Persist complaints on change
-  useEffect(() => {
+  // Fetch real-time complaints directly from backend DB
+  const loadComplaints = useCallback(async () => {
+    setIsLoading(true)
+    setError('')
     try {
-      localStorage.setItem(storageKey, JSON.stringify(complaints))
-    } catch (e) {
-      console.error('Failed to persist complaints to localStorage', e)
+      const data = await getMyComplaints()
+      setComplaints(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load complaints:', err)
+      setError(err.message || 'Unable to fetch your complaints from the server.')
+    } finally {
+      setIsLoading(false)
     }
-  }, [complaints, storageKey])
+  }, [])
+
+  useEffect(() => {
+    // Clear legacy localStorage cache from previous versions
+    if (user?.mobileNumber) {
+      localStorage.removeItem(`civicsense_complaints_${user.mobileNumber}`)
+      localStorage.removeItem('civicsense_complaints_citizen')
+    }
+    loadComplaints()
+  }, [loadComplaints, user?.mobileNumber])
 
   function handleComplaintCreated(newComplaint) {
     setComplaints((prev) => [newComplaint, ...prev])
     setNewlyCreatedComplaint(newComplaint)
+    // Silently refresh from backend to ensure data consistency
+    getMyComplaints()
+      .then((data) => {
+        if (Array.isArray(data)) setComplaints(data)
+      })
+      .catch(() => {})
   }
 
   return (
@@ -67,14 +83,29 @@ export default function CitizenDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('list')}
-              className="btn-secondary border-slate-700 bg-navy-800/80 text-xs text-slate-200 hover:bg-navy-700"
+              onClick={loadComplaints}
+              disabled={isLoading}
+              title="Refresh complaints from server"
+              className="btn-secondary border-slate-700 bg-navy-800/80 text-xs text-slate-200 hover:bg-navy-700 disabled:opacity-50"
             >
-              My Complaints ({complaints.length})
+              {isLoading ? <Spinner size={14} /> : '↻ Refresh'}
             </button>
           </div>
         </div>
       </div>
+
+      {error && (
+        <Alert variant="error" className="flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={loadComplaints}
+            className="ml-4 font-semibold underline hover:text-red-900"
+          >
+            Retry
+          </button>
+        </Alert>
+      )}
 
       {/* Metrics & Statistics */}
       <ComplaintStats complaints={complaints} onTabChange={setActiveTab} />
@@ -143,10 +174,17 @@ export default function CitizenDashboard() {
         )}
 
         {activeTab === 'list' && (
-          <ComplaintList
-            complaints={complaints}
-            onNewComplaintClick={() => setActiveTab('form')}
-          />
+          isLoading && complaints.length === 0 ? (
+            <div className="card flex items-center justify-center p-12 text-slate-500">
+              <Spinner size={24} className="mr-3 text-teal-600" />
+              <span>Loading complaints from server...</span>
+            </div>
+          ) : (
+            <ComplaintList
+              complaints={complaints}
+              onNewComplaintClick={() => setActiveTab('form')}
+            />
+          )
         )}
 
         {activeTab === 'guidelines' && <CivicGuidelines />}
@@ -204,4 +242,3 @@ function CivicGuidelinesCompact({ onLearnMore }) {
     </div>
   )
 }
-

@@ -35,3 +35,18 @@ export function createComplaint({ description, latitude, longitude, address, ima
   })
 }
 
+/**
+ * Fetches all complaints submitted by the currently logged-in citizen.
+ *
+ * Backend: GET /api/v1/complaints/my
+ *
+ * @returns {Promise<Array<{id: string, description: string, latitude: number, longitude: number, address: string, status: string, createdAt: string, imageUrl: string}>>}
+ */
+export function getMyComplaints() {
+  return apiRequest('/complaints/my', {
+    method: 'GET',
+    auth: true,
+  })
+}
+
+

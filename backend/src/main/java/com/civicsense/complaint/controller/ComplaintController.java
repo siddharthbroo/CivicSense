@@ -1,5 +1,6 @@
 package com.civicsense.complaint.controller;
 
+import com.civicsense.complaint.dto.ComplaintResponse;
 import com.civicsense.complaint.dto.CreateComplaintRequest;
 import com.civicsense.complaint.dto.CreateComplaintResponse;
 import com.civicsense.complaint.service.ComplaintService;
@@ -12,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/complaints")
@@ -43,4 +46,15 @@ public class ComplaintController {
                 .status(HttpStatus.CREATED)
                 .body(response);
     }
-}
+
+    @GetMapping("/my")
+    public ResponseEntity<List<ComplaintResponse>> getMyComplaints(
+            @AuthenticationPrincipal User user
+    ) {
+
+        List<ComplaintResponse> complaints =
+                complaintService.getMyComplaints(user.getId());
+
+        return ResponseEntity.ok(complaints);
+    }
+}

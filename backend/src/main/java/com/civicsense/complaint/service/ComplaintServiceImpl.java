@@ -1,5 +1,6 @@
 package com.civicsense.complaint.service;
 
+import com.civicsense.complaint.dto.ComplaintResponse;
 import com.civicsense.complaint.dto.CreateComplaintRequest;
 import com.civicsense.complaint.dto.CreateComplaintResponse;
 import com.civicsense.complaint.entity.Complaint;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import com.civicsense.complaint.service.ai.AiAnalysisService;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -100,4 +102,32 @@ public class ComplaintServiceImpl implements ComplaintService {
                 "Complaint submitted successfully"
         );
     }
-}
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ComplaintResponse> getMyComplaints(UUID userId) {
+
+        List<Complaint> complaints =
+                complaintRepository.findByUserIdOrderByCreatedAtDesc(userId);
+
+        return complaints.stream()
+                .map(complaint -> {
+                    String imageUrl = complaintImageRepository
+                            .findTopByComplaintIdOrderByCreatedAtDesc(complaint.getId())
+                            .map(ComplaintImage::getImageUrl)
+                            .orElse(null);
+
+                    return new ComplaintResponse(
+                            complaint.getId(),
+                            complaint.getDescription(),
+                            complaint.getLatitude(),
+                            complaint.getLongitude(),
+                            complaint.getAddress(),
+                            complaint.getStatus(),
+                            complaint.getCreatedAt(),
+                            imageUrl
+                    );
+                })
+                .toList();
+    }
+}

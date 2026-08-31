@@ -28,25 +28,37 @@ public class ComplaintAnalysis {
     @Column(length = 50)
     private String language;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 50)
-    private String category;
+    private ComplaintCategory category;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 30)
-    private String severity;
+    private ComplaintSeverity severity;
 
     @Column(length = 1000)
     private String summary;
 
-    @Column(length = 100)
-    private String department;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 50)
+    private ComplaintDepartment department;
 
     private double confidence;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "image_authenticity", length = 50)
-    private String imageAuthenticity;
+    private ImageAuthenticity imageAuthenticity;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "description_image_consistency", length = 50)
-    private String descriptionImageConsistency;
+    private DescriptionImageConsistency descriptionImageConsistency;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    private AiAnalysisStatus status;
+
+    @Column(name = "error_message", length = 1000)
+    private String errorMessage;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
