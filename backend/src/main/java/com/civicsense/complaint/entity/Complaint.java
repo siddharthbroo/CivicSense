@@ -1,6 +1,7 @@
 package com.civicsense.complaint.entity;
 
 import com.civicsense.user.entity.User;
+import com.civicsense.complaint.entity.cluster.ComplaintCluster;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -74,6 +75,19 @@ public class Complaint {
      */
     @Column(length = 500)
     private String address;
+
+    /*
+     * Cluster to which this complaint belongs.
+     *
+     * A complaint can belong to one cluster,
+     * while one cluster can contain multiple complaints.
+     *
+     * A complaint may initially have no cluster
+     * until duplicate detection is completed.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cluster_id")
+    private ComplaintCluster cluster;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -1,6 +1,12 @@
 package com.civicsense.complaint.service.ai;
 
 import com.civicsense.complaint.entity.*;
+import com.civicsense.complaint.entity.analysis.ComplaintSeverity;
+import com.civicsense.complaint.entity.analysis.DescriptionImageConsistency;
+import com.civicsense.complaint.entity.analysis.ImageAuthenticity;
+import com.civicsense.complaint.entity.classification.ComplaintCategory;
+import com.civicsense.complaint.entity.classification.ComplaintDepartment;
+import com.civicsense.complaint.entity.image.ComplaintImage;
 import com.google.genai.Client;
 import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;

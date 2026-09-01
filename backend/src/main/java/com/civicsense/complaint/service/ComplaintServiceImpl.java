@@ -4,7 +4,7 @@ import com.civicsense.complaint.dto.ComplaintResponse;
 import com.civicsense.complaint.dto.CreateComplaintRequest;
 import com.civicsense.complaint.dto.CreateComplaintResponse;
 import com.civicsense.complaint.entity.Complaint;
-import com.civicsense.complaint.entity.ComplaintImage;
+import com.civicsense.complaint.entity.image.ComplaintImage;
 import com.civicsense.complaint.entity.ComplaintStatus;
 import com.civicsense.complaint.repository.ComplaintImageRepository;
 import com.civicsense.complaint.repository.ComplaintRepository;
@@ -130,4 +130,4 @@ public class ComplaintServiceImpl implements ComplaintService {
                 })
                 .toList();
     }
-}
+}

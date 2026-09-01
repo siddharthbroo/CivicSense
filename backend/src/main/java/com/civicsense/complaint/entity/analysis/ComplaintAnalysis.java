@@ -1,5 +1,8 @@
-package com.civicsense.complaint.entity;
+package com.civicsense.complaint.entity.analysis;
 
+import com.civicsense.complaint.entity.*;
+import com.civicsense.complaint.entity.classification.ComplaintCategory;
+import com.civicsense.complaint.entity.classification.ComplaintDepartment;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

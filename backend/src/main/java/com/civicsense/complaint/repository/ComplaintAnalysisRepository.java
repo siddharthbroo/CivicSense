@@ -1,6 +1,6 @@
 package com.civicsense.complaint.repository;
 
-import com.civicsense.complaint.entity.ComplaintAnalysis;
+import com.civicsense.complaint.entity.analysis.ComplaintAnalysis;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

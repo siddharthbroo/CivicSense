@@ -1,4 +1,4 @@
-package com.civicsense.complaint.entity;
+package com.civicsense.complaint.entity.analysis;
 
 public enum AiAnalysisStatus {
     PENDING,

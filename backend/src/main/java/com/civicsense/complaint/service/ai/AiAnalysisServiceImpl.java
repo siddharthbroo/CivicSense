@@ -1,6 +1,9 @@
 package com.civicsense.complaint.service.ai;
 
 import com.civicsense.complaint.entity.*;
+import com.civicsense.complaint.entity.analysis.AiAnalysisStatus;
+import com.civicsense.complaint.entity.analysis.ComplaintAnalysis;
+import com.civicsense.complaint.entity.image.ComplaintImage;
 import com.civicsense.complaint.repository.ComplaintAnalysisRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

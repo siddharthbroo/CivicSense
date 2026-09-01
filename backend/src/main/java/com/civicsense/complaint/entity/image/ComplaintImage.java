@@ -1,5 +1,6 @@
-package com.civicsense.complaint.entity;
+package com.civicsense.complaint.entity.image;
 
+import com.civicsense.complaint.entity.Complaint;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
