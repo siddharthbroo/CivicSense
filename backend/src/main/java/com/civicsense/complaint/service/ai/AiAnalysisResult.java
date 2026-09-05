@@ -10,6 +10,8 @@ public record AiAnalysisResult(
 
         String language,
 
+        String title,
+
         ComplaintCategory category,
 
         ComplaintSeverity severity,

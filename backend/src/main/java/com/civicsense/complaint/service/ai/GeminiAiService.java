@@ -82,15 +82,18 @@ public class GeminiAiService {
 
         Analyze:
 
+        Analyze:
+        
         1. Detect the language.
-        2. Classify the complaint category.
-        3. Determine severity.
-        4. Create a short summary.
-        5. Recommend the responsible civic department.
-        6. Give a confidence score between 0 and 1.
-        7. Assess whether the image appears likely real,
+        2. Generate a short, clear complaint title.
+        3. Classify the complaint category.
+        4. Determine severity.
+        5. Create a short summary.
+        6. Recommend the responsible civic department.
+        7. Give a confidence score between 0 and 1.
+        8. Assess whether the image appears likely real,
            suspicious, or uncertain.
-        8. Check whether the image is consistent with
+        9. Check whether the image is consistent with
            the complaint description.
 
         CATEGORY:
@@ -123,10 +126,13 @@ public class GeminiAiService {
         - confidence must be a number between 0 and 1.
         - Return ONLY valid JSON.
         - Do not wrap the JSON in markdown or code fences.
+        - title must be concise and describe the main civic issue.
+        - title should normally be 5 to 10 words.
 
         Required JSON fields:
 
         language
+        title
         category
         severity
         summary

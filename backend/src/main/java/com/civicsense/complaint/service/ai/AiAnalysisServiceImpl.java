@@ -20,7 +20,7 @@ public class AiAnalysisServiceImpl implements AiAnalysisService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public AiAnalysisResult analyze(
             Complaint complaint,
             ComplaintImage complaintImage
