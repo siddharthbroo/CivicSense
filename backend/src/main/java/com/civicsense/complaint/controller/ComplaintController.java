@@ -15,46 +15,41 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/complaints")
 @RequiredArgsConstructor
 public class ComplaintController {
 
-    private final ComplaintService complaintService;
+        private final ComplaintService complaintService;
 
-    @PostMapping(
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-    )
-    public ResponseEntity<CreateComplaintResponse> createComplaint(
+        @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        public ResponseEntity<CreateComplaintResponse> createComplaint(
 
-            @AuthenticationPrincipal User user,
+                        @AuthenticationPrincipal User user,
 
-            @Valid @ModelAttribute CreateComplaintRequest request,
+                        @Valid @ModelAttribute CreateComplaintRequest request,
 
-            @RequestParam("image") MultipartFile image
-    ) {
+                        @RequestParam("image") MultipartFile image) {
 
-        CreateComplaintResponse response =
-                complaintService.createComplaint(
-                        user.getId(),
-                        request,
-                        image
-                );
+                CreateComplaintResponse response = complaintService.createComplaint(
+                                user.getId(),
+                                request,
+                                image);
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(response);
+        }
 
-    @GetMapping("/my")
-    public ResponseEntity<List<ComplaintResponse>> getMyComplaints(
-            @AuthenticationPrincipal User user
-    ) {
+        @GetMapping("/my")
+        public ResponseEntity<List<ComplaintResponse>> getMyComplaints(
+                        @AuthenticationPrincipal User user) {
 
-        List<ComplaintResponse> complaints =
-                complaintService.getMyComplaints(user.getId());
+                List<ComplaintResponse> complaints = complaintService.getMyComplaints(user.getId());
 
-        return ResponseEntity.ok(complaints);
-    }
-}
+                return ResponseEntity.ok(complaints);
+        }
+
+}

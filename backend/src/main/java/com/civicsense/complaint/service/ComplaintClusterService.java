@@ -20,9 +20,14 @@ public class ComplaintClusterService {
         ComplaintCluster cluster = matchedComplaint.getCluster();
 
         if (cluster == null) {
-            throw new IllegalStateException(
-                    "Matched complaint is not assigned to any cluster"
-            );
+            ComplaintCategory category = ComplaintCategory.OTHER;
+            if (matchedComplaint.getCategory() != null) {
+                try {
+                    category = ComplaintCategory.valueOf(matchedComplaint.getCategory());
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            cluster = createNewCluster(matchedComplaint, category);
         }
 
         complaint.setCluster(cluster);

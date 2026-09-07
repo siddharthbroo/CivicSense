@@ -13,8 +13,9 @@ public interface ComplaintService {
     CreateComplaintResponse createComplaint(
             UUID userId,
             CreateComplaintRequest request,
-            MultipartFile image
-    );
+            MultipartFile image);
 
     List<ComplaintResponse> getMyComplaints(UUID userId);
-}
+
+
+}

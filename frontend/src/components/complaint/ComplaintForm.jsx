@@ -3,12 +3,81 @@ import Alert from '../common/Alert.jsx'
 import Spinner from '../common/Spinner.jsx'
 import { createComplaint } from '../../api/complaintApi.js'
 
-const QUICK_CATEGORIES = [
-  { id: 'pothole', label: 'Road / Pothole', icon: '🛣️', template: 'Deep pothole / damaged road surface observed near' },
-  { id: 'garbage', label: 'Garbage & Waste', icon: '🗑️', template: 'Uncollected garbage and waste accumulation near' },
-  { id: 'streetlight', label: 'Street Light', icon: '💡', template: 'Street lights are non-functional or broken near' },
-  { id: 'water', label: 'Water / Sewage', icon: '💧', template: 'Water leakage / open drain issue causing inconvenience near' },
-  { id: 'sanitation', label: 'Sanitation', icon: '🧹', template: 'Unsanitary conditions and debris requiring municipal cleaning near' },
+const CIVIC_CATEGORIES = [
+  {
+    id: 'pothole',
+    label: 'Road & Pothole',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M4 19L8 5h8l4 14" />
+        <path d="M12 5v4m0 4v2m0 4v1" />
+        <circle cx="10" cy="14" r="2" />
+      </svg>
+    ),
+    color: 'text-amber-700 bg-amber-50 border-amber-200',
+    template: 'Damaged road / pothole observed near',
+  },
+  {
+    id: 'garbage',
+    label: 'Garbage & Waste',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 6h18" />
+        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+        <line x1="10" y1="11" x2="10" y2="17" />
+        <line x1="14" y1="11" x2="14" y2="17" />
+      </svg>
+    ),
+    color: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+    template: 'Uncollected garbage and waste accumulation near',
+  },
+  {
+    id: 'streetlight',
+    label: 'Street Light',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2a7 7 0 00-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 00-7-7z" />
+        <path d="M9 21h6" />
+      </svg>
+    ),
+    color: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+    template: 'Street lights are broken or non-functional near',
+  },
+  {
+    id: 'water',
+    label: 'Water & Sewage',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" />
+      </svg>
+    ),
+    color: 'text-blue-700 bg-blue-50 border-blue-200',
+    template: 'Water pipeline leakage / open sewer overflowing near',
+  },
+  {
+    id: 'sanitation',
+    label: 'Sanitation & Drains',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+    color: 'text-teal-700 bg-teal-50 border-teal-200',
+    template: 'Choked drain and unsanitary conditions near',
+  },
+  {
+    id: 'other',
+    label: 'Other Civic Issue',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    color: 'text-purple-700 bg-purple-50 border-purple-200',
+    template: 'Civic issue requiring municipal attention near',
+  },
 ]
 
 const MAX_IMAGE_SIZE_MB = 10
@@ -17,10 +86,12 @@ const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 export default function ComplaintForm({ onComplaintCreated }) {
   const fileInputRef = useRef(null)
 
+  const [selectedCategory, setSelectedCategory] = useState(null)
   const [description, setDescription] = useState('')
   const [address, setAddress] = useState('')
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
+  const [showManualCoords, setShowManualCoords] = useState(false)
   const [locationStatus, setLocationStatus] = useState('idle') // idle | detecting | success | error
   const [locationError, setLocationError] = useState('')
 
@@ -32,12 +103,11 @@ export default function ComplaintForm({ onComplaintCreated }) {
   const [serverError, setServerError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Quick category chip handler
-  function handleCategoryClick(template) {
+  // Category selection handler
+  function handleCategorySelect(cat) {
+    setSelectedCategory(cat.id)
     if (!description || description.trim() === '') {
-      setDescription(template + ' ')
-    } else {
-      setDescription((prev) => prev + ' (' + template + ')')
+      setDescription(cat.template + ' ')
     }
   }
 
@@ -47,6 +117,7 @@ export default function ComplaintForm({ onComplaintCreated }) {
     if (!navigator.geolocation) {
       setLocationStatus('error')
       setLocationError('Geolocation is not supported by your browser.')
+      setShowManualCoords(true)
       return
     }
 
@@ -62,22 +133,23 @@ export default function ComplaintForm({ onComplaintCreated }) {
       },
       (error) => {
         setLocationStatus('error')
+        setShowManualCoords(true)
         switch (error.code) {
           case error.PERMISSION_DENIED:
-            setLocationError('Location permission denied. Please allow GPS access or enter coordinates.')
+            setLocationError('Location permission denied. Please enable GPS or enter coordinates manually.')
             break
           case error.POSITION_UNAVAILABLE:
-            setLocationError('Location information is unavailable. Please check your GPS signal.')
+            setLocationError('Location signal unavailable. Please enter coordinates manually.')
             break
           case error.TIMEOUT:
-            setLocationError('Location request timed out. Please try again.')
+            setLocationError('Location request timed out. Please try again or enter manually.')
             break
           default:
             setLocationError('Failed to retrieve location. Please enter manually.')
             break
         }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     )
   }
 
@@ -124,30 +196,30 @@ export default function ComplaintForm({ onComplaintCreated }) {
     const errors = {}
 
     if (!description || description.trim().length < 10) {
-      errors.description = 'Description must be at least 10 characters long.'
+      errors.description = 'Please describe the issue in at least 10 characters.'
     } else if (description.length > 5000) {
       errors.description = 'Description cannot exceed 5000 characters.'
     }
 
     if (latitude === '' || longitude === '') {
-      errors.location = 'GPS Location is required. Click "Detect My Location" or enter coordinates.'
+      errors.location = 'GPS Location is required. Tap "Detect My Location" or enter coordinates below.'
     } else {
       const latNum = parseFloat(latitude)
       const lngNum = parseFloat(longitude)
       if (isNaN(latNum) || latNum < -90 || latNum > 90) {
-        errors.location = 'Please provide a valid latitude (-90 to 90).'
+        errors.location = 'Please enter a valid latitude between -90 and 90.'
       }
       if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
-        errors.location = 'Please provide a valid longitude (-180 to 180).'
+        errors.location = 'Please enter a valid longitude between -180 and 180.'
       }
     }
 
     if (!imageFile) {
-      errors.image = 'An issue photo is required to submit a complaint.'
+      errors.image = 'An issue photograph is required as physical proof.'
     }
 
     if (address && address.length > 500) {
-      errors.address = 'Address must not exceed 500 characters.'
+      errors.address = 'Landmark address must not exceed 500 characters.'
     }
 
     setFieldErrors(errors)
@@ -170,7 +242,7 @@ export default function ComplaintForm({ onComplaintCreated }) {
         image: imageFile,
       })
 
-      // Pass created complaint info to parent
+      // Notify parent
       onComplaintCreated?.({
         id: response.complaintId,
         description: description.trim(),
@@ -187,102 +259,121 @@ export default function ComplaintForm({ onComplaintCreated }) {
       setAddress('')
       setLatitude('')
       setLongitude('')
+      setSelectedCategory(null)
       setLocationStatus('idle')
       handleRemoveImage()
     } catch (err) {
-      setServerError(err.message || 'Failed to submit complaint. Please try again.')
+      setServerError(err.message || 'Failed to submit complaint. Please check your connection and try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="card overflow-hidden p-6 sm:p-8">
-      <div className="mb-6 border-b border-slate-200 pb-5">
-        <h2 className="text-xl font-bold text-navy-900">File a New Civic Complaint</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Provide complete details and a clear photograph to help municipal officers locate and resolve the issue quickly.
-        </p>
+    <div className="card overflow-hidden shadow-card border border-slate-200">
+      {/* Header Banner */}
+      <div className="border-b border-slate-100 bg-slate-50/75 p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="font-display text-lg sm:text-xl font-bold text-navy-900">
+              Report a Civic Issue
+            </h2>
+            <p className="text-xs text-slate-500">
+              Directly notify your municipal authority with photo evidence and location.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {serverError && <Alert variant="error" className="mb-6">{serverError}</Alert>}
+      {/* Form Content */}
+      <form onSubmit={handleSubmit} noValidate className="p-5 sm:p-7 space-y-6">
+        {serverError && <Alert variant="error">{serverError}</Alert>}
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
-        {/* Quick Issue Templates */}
+        {/* 1. Category Selection */}
         <div>
-          <label className="field-label">Quick Issue Category</label>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => handleCategoryClick(cat.template)}
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-teal-400 hover:bg-teal-50 hover:text-teal-900"
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Complaint Description */}
-        <div>
-          <div className="flex items-center justify-between">
-            <label htmlFor="description" className="field-label">
-              Complaint Description <span className="text-teal-700">*</span>
-            </label>
-            <span className={`text-xs ${description.length > 5000 ? 'text-red-600 font-semibold' : 'text-slate-400'}`}>
-              {description.length} / 5000
+          <label className="field-label flex items-center justify-between">
+            <span>
+              1. Select Issue Category <span className="text-teal-700">*</span>
             </span>
+            <span className="text-[11px] text-slate-400">Tap to auto-fill</span>
+          </label>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {CIVIC_CATEGORIES.map((cat) => {
+              const isSelected = selectedCategory === cat.id
+
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => handleCategorySelect(cat)}
+                  disabled={isSubmitting}
+                  className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all duration-150 active:scale-[0.98] ${
+                    isSelected
+                      ? 'border-teal-600 bg-teal-50/60 ring-2 ring-teal-500 text-teal-950 font-semibold shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60 text-slate-700'
+                  }`}
+                >
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cat.color}`}>
+                    {cat.icon}
+                  </div>
+                  <span className="text-xs font-medium leading-tight">
+                    {cat.label}
+                  </span>
+                </button>
+              )
+            })}
           </div>
-          <textarea
-            id="description"
-            rows={4}
-            className={`input-field resize-y ${fieldErrors.description ? 'input-field-error' : ''}`}
-            placeholder="Describe the civic issue in detail (e.g., location specifics, hazard level, since when it has been occurring)..."
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value)
-              if (fieldErrors.description) {
-                setFieldErrors((prev) => ({ ...prev, description: '' }))
-              }
-            }}
-            disabled={isSubmitting}
-          />
-          {fieldErrors.description && <p className="field-error">{fieldErrors.description}</p>}
-          <p className="mt-1 text-xs text-slate-500">
-            Minimum 10 characters. Can be written in English, Hindi, or Hinglish.
-          </p>
         </div>
 
-        {/* Image Upload */}
+        {/* 2. Photo Upload Dropzone */}
         <div>
-          <label className="field-label">
-            Issue Photograph (Proof) <span className="text-teal-700">*</span>
+          <label className="field-label flex items-center justify-between">
+            <span>
+              2. Upload Photo Proof <span className="text-teal-700">*</span>
+            </span>
+            <span className="text-[11px] text-slate-400">JPG, PNG up to {MAX_IMAGE_SIZE_MB}MB</span>
           </label>
 
           {imagePreview ? (
-            <div className="relative flex flex-col items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 p-4 sm:flex-row sm:justify-start sm:gap-6">
-              <img
-                src={imagePreview}
-                alt="Selected issue"
-                className="h-32 w-32 rounded-md object-cover shadow-sm ring-1 ring-slate-300"
-              />
-              <div className="mt-3 text-center sm:mt-0 sm:text-left">
-                <p className="text-sm font-semibold text-navy-900">{imageFile?.name}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {((imageFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB · {imageFile?.type}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  disabled={isSubmitting}
-                  className="btn-secondary mt-3 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 hover:border-red-300"
-                >
-                  Remove & Replace
-                </button>
+            <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white">
+                  <img
+                    src={imagePreview}
+                    alt="Uploaded issue"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-semibold text-green-700">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    <span>Photo Attached Successfully</span>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-slate-700 truncate max-w-xs">
+                    {imageFile?.name}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {((imageFile?.size || 0) / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    disabled={isSubmitting}
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 underline"
+                  >
+                    Remove & Take Another
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -303,127 +394,158 @@ export default function ComplaintForm({ onComplaintCreated }) {
               onKeyDown={(e) => {
                 if ((e.key === 'Enter' || e.key === ' ') && !isSubmitting) fileInputRef.current?.click()
               }}
-              className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-7 text-center transition-colors ${
+              className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all duration-150 active:scale-[0.99] ${
                 isDragging
                   ? 'border-teal-500 bg-teal-50'
                   : fieldErrors.image
-                  ? 'border-red-400 bg-red-50/30'
-                  : 'border-slate-300 bg-slate-25 hover:border-teal-400 hover:bg-teal-50/20'
+                  ? 'border-red-300 bg-red-50/20'
+                  : 'border-slate-300 bg-slate-50/50 hover:border-teal-400 hover:bg-teal-50/30'
               } ${isSubmitting ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/jpg,image/png"
+                capture="environment"
                 className="sr-only"
                 disabled={isSubmitting}
                 onChange={(e) => handleImageSelect(e.target.files?.[0])}
               />
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 text-teal-600">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                  <circle cx="12" cy="13" r="4" />
                 </svg>
               </div>
-              <p className="mt-3 text-sm font-medium text-navy-800">
-                <span className="text-teal-700">Click to upload issue photo</span> or drag and drop
+              <p className="mt-2.5 text-sm font-semibold text-navy-900">
+                <span className="text-teal-700 underline">Tap to take photo</span> or upload from device
               </p>
-              <p className="mt-1 text-xs text-slate-500">JPG, JPEG, or PNG up to {MAX_IMAGE_SIZE_MB}MB</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Supports Camera, JPG or PNG (up to 10MB)
+              </p>
             </div>
           )}
           {fieldErrors.image && <p className="field-error">{fieldErrors.image}</p>}
         </div>
 
-        {/* GPS Location & Landmark Address */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:p-5">
-          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        {/* 3. GPS Location Detection */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <span className="text-sm font-bold text-navy-900">Issue Location</span>
-              <p className="text-xs text-slate-500">Accurate GPS coordinates help officers dispatch teams to the exact spot.</p>
+              <span className="text-sm font-bold text-navy-900">
+                3. Exact Location <span className="text-teal-700">*</span>
+              </span>
+              <p className="text-xs text-slate-500">
+                Enables municipal crew to navigate straight to the issue.
+              </p>
             </div>
+
             <button
               type="button"
               onClick={handleDetectLocation}
               disabled={isSubmitting || locationStatus === 'detecting'}
-              className="btn-secondary inline-flex items-center gap-1.5 border-teal-600 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:border-slate-300 disabled:text-slate-400"
+              className="btn-accent inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold shadow-sm disabled:opacity-60"
             >
               {locationStatus === 'detecting' ? (
                 <>
                   <Spinner size={14} />
-                  <span>Detecting GPS…</span>
+                  <span>Acquiring GPS Signal…</span>
                 </>
               ) : (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M12 2v2m0 16v2M2 12h2m16 0h2m-4.93-7.07l-1.41 1.41m-9.32 9.32l-1.41 1.41m0-12.14l1.41 1.41m9.32 9.32l1.41 1.41M12 8a4 4 0 100 8 4 4 0 000-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="3" />
+                    <line x1="12" y1="2" x2="12" y2="6" />
+                    <line x1="12" y1="18" x2="12" y2="22" />
+                    <line x1="2" y1="12" x2="6" y2="12" />
+                    <line x1="18" y1="12" x2="22" y2="12" />
                   </svg>
-                  <span>Detect My Location</span>
+                  <span>{latitude ? 'Update My Location' : 'Detect My Location'}</span>
                 </>
               )}
             </button>
           </div>
 
-          {locationStatus === 'success' && (
-            <div className="mt-3 flex items-center gap-2 rounded-md bg-teal-100/60 px-3 py-2 text-xs font-medium text-teal-900 ring-1 ring-inset ring-teal-300">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-teal-700" aria-hidden="true">
-                <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>GPS Coordinates captured successfully!</span>
+          {/* Location Success Banner */}
+          {locationStatus === 'success' && latitude && longitude && (
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-teal-200 bg-teal-50/80 px-3.5 py-2.5 text-xs text-teal-900">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-white text-[10px]">✓</span>
+                <span className="font-medium">
+                  GPS Fixed: <strong className="font-mono">{latitude}, {longitude}</strong>
+                </span>
+              </div>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-teal-800 hover:underline"
+              >
+                View Pin &rarr;
+              </a>
             </div>
           )}
 
           {locationError && (
-            <p className="mt-2 text-xs font-medium text-red-600">{locationError}</p>
+            <p className="mt-2.5 text-xs font-medium text-red-600 bg-red-50 p-2 rounded border border-red-200">
+              {locationError}
+            </p>
           )}
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="latitude" className="field-label text-xs">
-                Latitude <span className="text-teal-700">*</span>
-              </label>
-              <input
-                id="latitude"
-                type="number"
-                step="any"
-                className={`input-field py-2 text-xs ${fieldErrors.location ? 'input-field-error' : ''}`}
-                placeholder="e.g. 28.613939"
-                value={latitude}
-                onChange={(e) => {
-                  setLatitude(e.target.value)
-                  if (fieldErrors.location) setFieldErrors((prev) => ({ ...prev, location: '' }))
-                }}
-                disabled={isSubmitting}
-              />
+          {/* Coordinates (Expandable / Visible when needed) */}
+          {(showManualCoords || (!latitude && !longitude)) && (
+            <div className="mt-3 grid grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+              <div>
+                <label htmlFor="latitude" className="field-label text-[11px]">
+                  Latitude <span className="text-teal-700">*</span>
+                </label>
+                <input
+                  id="latitude"
+                  type="number"
+                  step="any"
+                  className={`input-field py-2 text-xs font-mono ${fieldErrors.location ? 'input-field-error' : ''}`}
+                  placeholder="e.g. 28.613939"
+                  value={latitude}
+                  onChange={(e) => {
+                    setLatitude(e.target.value)
+                    if (fieldErrors.location) setFieldErrors((prev) => ({ ...prev, location: '' }))
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label htmlFor="longitude" className="field-label text-[11px]">
+                  Longitude <span className="text-teal-700">*</span>
+                </label>
+                <input
+                  id="longitude"
+                  type="number"
+                  step="any"
+                  className={`input-field py-2 text-xs font-mono ${fieldErrors.location ? 'input-field-error' : ''}`}
+                  placeholder="e.g. 77.209021"
+                  value={longitude}
+                  onChange={(e) => {
+                    setLongitude(e.target.value)
+                    if (fieldErrors.location) setFieldErrors((prev) => ({ ...prev, location: '' }))
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="longitude" className="field-label text-xs">
-                Longitude <span className="text-teal-700">*</span>
-              </label>
-              <input
-                id="longitude"
-                type="number"
-                step="any"
-                className={`input-field py-2 text-xs ${fieldErrors.location ? 'input-field-error' : ''}`}
-                placeholder="e.g. 77.209021"
-                value={longitude}
-                onChange={(e) => {
-                  setLongitude(e.target.value)
-                  if (fieldErrors.location) setFieldErrors((prev) => ({ ...prev, location: '' }))
-                }}
-                disabled={isSubmitting}
-              />
-            </div>
-          </div>
+          )}
           {fieldErrors.location && <p className="field-error">{fieldErrors.location}</p>}
 
-          <div className="mt-4">
+          {/* Optional Landmark / Address */}
+          <div className="mt-3">
             <label htmlFor="address" className="field-label text-xs">
-              Landmark / Detailed Address (Optional)
+              Landmark / Street Address (Recommended)
             </label>
             <input
               id="address"
               type="text"
               className={`input-field py-2 text-xs ${fieldErrors.address ? 'input-field-error' : ''}`}
-              placeholder="e.g. Opposite Sector 14 Gate 2, near Central Bank ATM"
+              placeholder="e.g. Opposite Sector 14 Gate 2, near Municipal Water Tank"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               disabled={isSubmitting}
@@ -433,25 +555,61 @@ export default function ComplaintForm({ onComplaintCreated }) {
           </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="flex items-center justify-end gap-3 pt-2">
+        {/* 4. Description Textarea */}
+        <div>
+          <div className="flex items-center justify-between">
+            <label htmlFor="description" className="field-label">
+              4. Issue Description <span className="text-teal-700">*</span>
+            </label>
+            <span className={`text-xs ${description.length > 5000 ? 'text-red-600 font-bold' : 'text-slate-400'}`}>
+              {description.length} / 5000
+            </span>
+          </div>
+
+          <textarea
+            id="description"
+            rows={4}
+            className={`input-field resize-y text-sm ${fieldErrors.description ? 'input-field-error' : ''}`}
+            placeholder="Describe the issue clearly (e.g. depth of pothole, traffic obstruction, since when it has been occurring)..."
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              if (fieldErrors.description) {
+                setFieldErrors((prev) => ({ ...prev, description: '' }))
+              }
+            }}
+            disabled={isSubmitting}
+          />
+          {fieldErrors.description && <p className="field-error">{fieldErrors.description}</p>}
+          <p className="mt-1 text-[11px] text-slate-400">
+            Minimum 10 characters. Can be written in English, Hindi, or Hinglish.
+          </p>
+        </div>
+
+        {/* Primary Submit Button */}
+        <div className="pt-2">
           <button
             type="submit"
-            className="btn-accent w-full sm:w-auto sm:min-w-[180px]"
             disabled={isSubmitting}
+            className="btn-primary w-full py-3 text-sm font-semibold tracking-wide shadow-md active:scale-[0.99] disabled:opacity-60"
           >
             {isSubmitting ? (
-              <>
-                <Spinner size={16} />
-                <span>Uploading & Filing…</span>
-              </>
+              <span className="flex items-center justify-center gap-2">
+                <Spinner size={18} />
+                <span>Uploading & Submitting Report…</span>
+              </span>
             ) : (
-              <span>Submit Complaint</span>
+              <span className="flex items-center justify-center gap-2">
+                <span>Submit Civic Report</span>
+                <span aria-hidden="true">&rarr;</span>
+              </span>
             )}
           </button>
+          <p className="mt-2 text-center text-[11px] text-slate-400">
+            Your report is sent directly to the local municipal ward officer.
+          </p>
         </div>
       </form>
     </div>
   )
 }
-

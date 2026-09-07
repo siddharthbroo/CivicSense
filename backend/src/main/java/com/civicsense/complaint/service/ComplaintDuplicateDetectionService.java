@@ -27,16 +27,51 @@ public class ComplaintDuplicateDetectionService {
             ComplaintAnalysis analysis
     ) {
 
-        List<ComplaintAnalysis> candidates =
-                complaintAnalysisRepository
-                        .findByCategoryAndComplaintIdNot(
-                                analysis.getCategory(),
-                                complaint.getId()
-                        );
+        if (complaint.getLatitude() == null || complaint.getLongitude() == null || analysis.getCategory() == null) {
+            return new DuplicateDetectionResult(
+                    ComplaintDuplicateScoringService.DuplicateDecision.SEPARATE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
+
+        double latDelta = 0.005; // ~550m bounding box (well covers the 50m max threshold)
+        double lonDelta = 0.005;
+
+        List<ComplaintAnalysis> candidates;
+        try {
+            candidates = complaintAnalysisRepository.findCandidates(
+                    analysis.getCategory(),
+                    complaint.getId(),
+                    complaint.getLatitude() - latDelta,
+                    complaint.getLatitude() + latDelta,
+                    complaint.getLongitude() - lonDelta,
+                    complaint.getLongitude() + lonDelta
+            );
+        } catch (Exception e) {
+            System.out.println("Candidate search failed: " + e.getMessage());
+            return new DuplicateDetectionResult(
+                    ComplaintDuplicateScoringService.DuplicateDecision.SEPARATE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+            );
+        }
 
         if (candidates.isEmpty()) {
             return new DuplicateDetectionResult(
                     ComplaintDuplicateScoringService.DuplicateDecision.SEPARATE,
+                    null,
+                    null,
+                    null,
+                    null,
                     null,
                     null
             );
@@ -54,11 +89,19 @@ public class ComplaintDuplicateDetectionService {
                 .map(result -> new DuplicateDetectionResult(
                         result.decision(),
                         result.complaint(),
-                        result.score()
+                        result.score(),
+                        result.textSimilarity(),
+                        result.imageSimilarity(),
+                        result.addressSimilarity(),
+                        result.distanceMeters()
                 ))
                 .orElse(
                         new DuplicateDetectionResult(
                                 ComplaintDuplicateScoringService.DuplicateDecision.SEPARATE,
+                                null,
+                                null,
+                                null,
+                                null,
                                 null,
                                 null
                         )
@@ -98,12 +141,15 @@ public class ComplaintDuplicateDetectionService {
 
         if (newComplaintImage != null
                 && candidateComplaintImage != null) {
-
-            imageSimilarity =
-                    pythonAiClient.calculateImageSimilarity(
-                            newComplaintImage.getImageUrl(),
-                            candidateComplaintImage.getImageUrl()
-                    );
+            try {
+                imageSimilarity =
+                        pythonAiClient.calculateImageSimilarity(
+                                newComplaintImage.getImageUrl(),
+                                candidateComplaintImage.getImageUrl()
+                        );
+            } catch (Exception e) {
+                System.out.println("Image similarity calculation failed: " + e.getMessage());
+            }
         }
 
         /*
@@ -112,18 +158,24 @@ public class ComplaintDuplicateDetectionService {
          * ==========================================
          */
 
-        double addressSimilarity = 0.0;
-
-        if (complaint.getAddress() != null
+        boolean hasAddressComparison = complaint.getAddress() != null
                 && candidateComplaint.getAddress() != null
                 && !complaint.getAddress().isBlank()
-                && !candidateComplaint.getAddress().isBlank()) {
+                && !candidateComplaint.getAddress().isBlank();
 
-            addressSimilarity =
-                    pythonAiClient.calculateAddressSimilarity(
-                            complaint.getAddress(),
-                            candidateComplaint.getAddress()
-                    );
+        double addressSimilarity = 0.0;
+
+        if (hasAddressComparison) {
+            try {
+                addressSimilarity =
+                        pythonAiClient.calculateAddressSimilarity(
+                                complaint.getAddress(),
+                                candidateComplaint.getAddress()
+                        );
+            } catch (Exception e) {
+                System.out.println("Address similarity calculation failed: " + e.getMessage());
+                hasAddressComparison = false;
+            }
         }
 
         /*
@@ -132,50 +184,93 @@ public class ComplaintDuplicateDetectionService {
          * ==========================================
          */
 
-        double distanceMeters =
-                pythonAiClient.calculateLocationDistance(
-                        complaint.getLatitude(),
-                        complaint.getLongitude(),
-                        candidateComplaint.getLatitude(),
-                        candidateComplaint.getLongitude()
-                );
+        double distanceMeters = 99999.0;
+        try {
+            distanceMeters =
+                    pythonAiClient.calculateLocationDistance(
+                            complaint.getLatitude(),
+                            complaint.getLongitude(),
+                            candidateComplaint.getLatitude(),
+                            candidateComplaint.getLongitude()
+                    );
+        } catch (Exception e) {
+            System.out.println("Location distance calculation failed: " + e.getMessage());
+        }
 
         /*
          * ==========================================
-         * 2. TEXT SIMILARITY
+         * 4. TEXT SIMILARITY
          * ==========================================
          */
 
-        ComplaintTextSimilarityResponse textSimilarity =
-                pythonAiClient.compareComplaints(
-                        complaint.getTitle(),
-                        complaint.getDescription(),
-                        analysis.getSummary(),
-                        analysis.getCategory().name(),
+        ComplaintTextSimilarityResponse textSimilarity;
+        try {
+            textSimilarity =
+                    pythonAiClient.compareComplaints(
+                            complaint.getTitle(),
+                            complaint.getDescription(),
+                            analysis.getSummary(),
+                            analysis.getCategory() != null ? analysis.getCategory().name() : "",
 
-                        candidateComplaint.getTitle(),
-                        candidateComplaint.getDescription(),
-                        candidateAnalysis.getSummary(),
-                        candidateAnalysis.getCategory().name()
-                );
+                            candidateComplaint.getTitle(),
+                            candidateComplaint.getDescription(),
+                            candidateAnalysis.getSummary(),
+                            candidateAnalysis.getCategory() != null ? candidateAnalysis.getCategory().name() : ""
+                    );
+        } catch (Exception e) {
+            System.out.println("Text similarity comparison failed: " + e.getMessage());
+            textSimilarity = new ComplaintTextSimilarityResponse(0.0, 0.0, 0.0, true);
+        }
 
         /*
          * ==========================================
-         * 3. COMBINED SCORE
+         * 5. SIMILARITY DETAILS
          * ==========================================
-         *
-         * Address and location will be added
-         * in the next steps.
          */
 
-        System.out.println("===== SIMILARITY DETAILS =====");
-        System.out.println("Title Similarity       = " + textSimilarity.title_similarity());
-        System.out.println("Description Similarity = " + textSimilarity.description_similarity());
-        System.out.println("Summary Similarity     = " + textSimilarity.summary_similarity());
-        System.out.println("Image Similarity       = " + imageSimilarity);
-        System.out.println("Address Similarity     = " + addressSimilarity);
-        System.out.println("Location Distance      = " + distanceMeters);
-        System.out.println("==============================");
+        System.out.println(
+                "===== SIMILARITY DETAILS ====="
+        );
+
+        System.out.println(
+                "Title Similarity       = "
+                        + textSimilarity.title_similarity()
+        );
+
+        System.out.println(
+                "Description Similarity = "
+                        + textSimilarity.description_similarity()
+        );
+
+        System.out.println(
+                "Summary Similarity     = "
+                        + textSimilarity.summary_similarity()
+        );
+
+        System.out.println(
+                "Image Similarity       = "
+                        + imageSimilarity
+        );
+
+        System.out.println(
+                "Address Similarity     = "
+                        + addressSimilarity
+        );
+
+        System.out.println(
+                "Location Distance      = "
+                        + distanceMeters
+        );
+
+        System.out.println(
+                "=============================="
+        );
+
+        /*
+         * ==========================================
+         * 6. COMBINED SCORE
+         * ==========================================
+         */
 
         double score =
                 scoringService.calculateCombinedScore(
@@ -184,12 +279,13 @@ public class ComplaintDuplicateDetectionService {
                         textSimilarity.summary_similarity(),
                         imageSimilarity,
                         addressSimilarity,
-                        distanceMeters
+                        distanceMeters,
+                        hasAddressComparison
                 );
 
         /*
          * ==========================================
-         * 4. DUPLICATE DECISION
+         * 7. DUPLICATE DECISION
          * ==========================================
          */
 
@@ -202,21 +298,45 @@ public class ComplaintDuplicateDetectionService {
         return new DuplicateCandidateResult(
                 candidateComplaint,
                 score,
-                decision
+                decision,
+                textSimilarity,
+                imageSimilarity,
+                addressSimilarity,
+                distanceMeters
         );
     }
+
+    /*
+     * ==========================================
+     * INTERNAL RESULT FOR EACH CANDIDATE
+     * ==========================================
+     */
 
     private record DuplicateCandidateResult(
             Complaint complaint,
             double score,
-            ComplaintDuplicateScoringService.DuplicateDecision decision
+            ComplaintDuplicateScoringService.DuplicateDecision decision,
+            ComplaintTextSimilarityResponse textSimilarity,
+            double imageSimilarity,
+            double addressSimilarity,
+            double distanceMeters
     ) {
     }
+
+    /*
+     * ==========================================
+     * FINAL DUPLICATE DETECTION RESULT
+     * ==========================================
+     */
 
     public record DuplicateDetectionResult(
             ComplaintDuplicateScoringService.DuplicateDecision decision,
             Complaint matchedComplaint,
-            Double score
+            Double score,
+            ComplaintTextSimilarityResponse textSimilarity,
+            Double imageSimilarity,
+            Double addressSimilarity,
+            Double distanceMeters
     ) {
     }
 }

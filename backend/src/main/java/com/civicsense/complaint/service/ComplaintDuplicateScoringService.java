@@ -25,17 +25,43 @@ public class ComplaintDuplicateScoringService {
             double addressSimilarity,
             double distanceMeters
     ) {
+        return calculateCombinedScore(
+                titleSimilarity,
+                descriptionSimilarity,
+                summarySimilarity,
+                imageSimilarity,
+                addressSimilarity,
+                distanceMeters,
+                true
+        );
+    }
+
+    public double calculateCombinedScore(
+            double titleSimilarity,
+            double descriptionSimilarity,
+            double summarySimilarity,
+            double imageSimilarity,
+            double addressSimilarity,
+            double distanceMeters,
+            boolean hasAddressComparison
+    ) {
 
         double locationSimilarity =
                 calculateLocationSimilarity(distanceMeters);
 
-        return
+        double rawScore =
                 (titleSimilarity * TITLE_WEIGHT)
                         + (descriptionSimilarity * DESCRIPTION_WEIGHT)
                         + (summarySimilarity * SUMMARY_WEIGHT)
                         + (imageSimilarity * IMAGE_WEIGHT)
                         + (addressSimilarity * ADDRESS_WEIGHT)
                         + (locationSimilarity * LOCATION_WEIGHT);
+
+        if (!hasAddressComparison) {
+            return rawScore / (1.0 - ADDRESS_WEIGHT);
+        }
+
+        return rawScore;
     }
 
     public DuplicateDecision decide(

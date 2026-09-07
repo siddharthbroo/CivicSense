@@ -47,6 +47,8 @@ public class AadhaarOcrParser {
 
         String[] lines = text.split("\\R");
 
+        // --- Strategy 1: anchor-based ---
+        // Look for a line containing "name" and extract the candidate from the next non-empty line.
         for (int i = 0; i < lines.length; i++) {
 
             String line = lines[i].trim();
@@ -84,6 +86,52 @@ public class AadhaarOcrParser {
                         continue;
                     }
 
+                    return candidate;
+                }
+            }
+        }
+
+        // --- Strategy 2: anchor-less fallback ---
+        // Some Aadhaar cards produce OCR output without a "name" label at all.
+        // In that case, the name typically appears as an isolated line with 1-4
+        // properly capitalised words, after any header text and before the DOB line.
+        for (String line : lines) {
+
+            String candidate = line.trim();
+
+            if (candidate.isEmpty()) {
+                continue;
+            }
+
+            // Skip known Aadhaar header keywords
+            String upper = candidate.toUpperCase();
+            if (upper.contains("GOVERNMENT")
+                    || upper.contains("INDIA")
+                    || upper.contains("UNIQUE")
+                    || upper.contains("IDENTIFICATION")
+                    || upper.contains("AUTHORITY")
+                    || upper.contains("UIDAI")
+                    || upper.contains("DOB")
+                    || upper.contains("DATE OF BIRTH")
+                    || upper.contains("MALE")
+                    || upper.contains("FEMALE")
+                    || candidate.matches(".*\\d{2}[/-]\\d{2}[/-]\\d{4}.*")
+                    || candidate.matches(".*\\d{4}\\s+\\d{4}\\s+\\d{4}.*")) {
+                continue;
+            }
+
+            // Strip leading non-alphabetic OCR noise (e.g. "¥ Niranjan Kumar")
+            candidate = candidate.replaceAll("^[^A-Za-z]+", "").trim();
+
+            if (candidate.isEmpty()) {
+                continue;
+            }
+
+            // Accept only if it looks like a name: 1-4 words, each starting with a letter,
+            // containing only letters, spaces, dots and hyphens.
+            if (candidate.matches("[A-Za-z][A-Za-z.'\\-]*(\\s+[A-Za-z][A-Za-z.'\\-]*){0,3}")) {
+                // Reject single short tokens that are likely OCR debris (< 3 chars)
+                if (candidate.length() >= 3) {
                     return candidate;
                 }
             }
@@ -162,4 +210,4 @@ public class AadhaarOcrParser {
         System.out.println("[AadhaarOcrParser] Gender not found in OCR text.");
         return null;
     }
-}
+}
