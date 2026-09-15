@@ -6,25 +6,38 @@ import com.civicsense.complaint.entity.analysis.ComplaintSeverity;
 import com.civicsense.complaint.entity.analysis.DescriptionImageConsistency;
 import com.civicsense.complaint.entity.analysis.ImageAuthenticity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record AiAnalysisResult(
 
-        String language,
+                String language,
 
-        String title,
+                String title,
 
-        ComplaintCategory category,
+                ComplaintCategory category,
 
-        ComplaintSeverity severity,
+                ComplaintSeverity severity,
 
-        String summary,
+                String summary,
 
-        ComplaintDepartment department,
+                ComplaintDepartment department,
 
-        double confidence,
+                double confidence,
 
-        ImageAuthenticity imageAuthenticity,
+                ImageAuthenticity imageAuthenticity,
 
-        DescriptionImageConsistency descriptionImageConsistency
+                DescriptionImageConsistency descriptionImageConsistency,
+
+                ComplaintSeverity safetyRisk,
+
+                Boolean immediateHazard,
+
+                ComplaintSeverity publicImpact,
+
+                String potentialHarm,
+
+                ComplaintSeverity recommendedUrgency
 
 ) {
 }

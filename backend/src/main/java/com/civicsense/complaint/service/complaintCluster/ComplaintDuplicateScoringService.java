@@ -1,4 +1,4 @@
-package com.civicsense.complaint.service;
+package com.civicsense.complaint.service.complaintCluster;
 
 import org.springframework.stereotype.Service;
 

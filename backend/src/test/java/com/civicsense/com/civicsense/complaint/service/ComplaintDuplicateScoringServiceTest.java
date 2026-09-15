@@ -1,6 +1,6 @@
 package com.civicsense.com.civicsense.complaint.service;
 
-import com.civicsense.complaint.service.ComplaintDuplicateScoringService;
+import com.civicsense.complaint.service.complaintCluster.ComplaintDuplicateScoringService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

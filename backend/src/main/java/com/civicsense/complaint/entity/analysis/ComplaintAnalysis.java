@@ -57,6 +57,24 @@ public class ComplaintAnalysis {
     private DescriptionImageConsistency descriptionImageConsistency;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "safety_risk", length = 30)
+    private ComplaintSeverity safetyRisk;
+
+    @Column(name = "immediate_hazard")
+    private Boolean immediateHazard;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "public_impact", length = 30)
+    private ComplaintSeverity publicImpact;
+
+    @Column(name = "potential_harm", length = 1000)
+    private String potentialHarm;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recommended_urgency", length = 30)
+    private ComplaintSeverity recommendedUrgency;
+
+    @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     private AiAnalysisStatus status;
 

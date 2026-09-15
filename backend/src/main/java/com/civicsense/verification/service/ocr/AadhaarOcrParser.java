@@ -8,25 +8,22 @@ import java.util.regex.Pattern;
 
 public class AadhaarOcrParser {
 
-    private static final Pattern DOB_PATTERN =
-            Pattern.compile("\\b\\d{2}[/-]\\d{2}[/-]\\d{4}\\b");
+    private static final Pattern DOB_PATTERN = Pattern.compile("\\b\\d{2}[/-]\\d{2}[/-]\\d{4}\\b");
 
     /**
      * Matches MALE or FEMALE (case-insensitive) even when surrounded by
      * OCR noise characters like '/', '|', '(', ')', ':', spaces.
      * Deliberately excludes single M/F to avoid false positives in names.
      */
-    private static final Pattern GENDER_PATTERN =
-            Pattern.compile(
-                    "(?<![A-Za-z])(MALE|FEMALE)(?![A-Za-z])",
-                    Pattern.CASE_INSENSITIVE
-            );
+    private static final Pattern GENDER_PATTERN = Pattern.compile(
+            "(?<![A-Za-z])(MALE|FEMALE)(?![A-Za-z])",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * Known Tesseract OCR typos for MALE and FEMALE on Aadhaar cards.
      * Add more entries as new misreads are discovered in logs.
      */
-    private static final String[] MALE_TYPOS   = { "HALE", "NALE", "MNALE", "MAE", "MLE" };
+    private static final String[] MALE_TYPOS = { "HALE", "NALE", "MNALE", "MAE", "MLE" };
     private static final String[] FEMALE_TYPOS = { "FEMRLE", "FIMALE", "FENALE", "FEIALE", "FEMLE" };
 
     public OcrResult parse(String text) {
@@ -48,7 +45,8 @@ public class AadhaarOcrParser {
         String[] lines = text.split("\\R");
 
         // --- Strategy 1: anchor-based ---
-        // Look for a line containing "name" and extract the candidate from the next non-empty line.
+        // Look for a line containing "name" and extract the candidate from the next
+        // non-empty line.
         for (int i = 0; i < lines.length; i++) {
 
             String line = lines[i].trim();
@@ -153,8 +151,7 @@ public class AadhaarOcrParser {
         try {
             return LocalDate.parse(
                     date,
-                    DateTimeFormatter.ofPattern("dd/MM/yyyy")
-            );
+                    DateTimeFormatter.ofPattern("dd/MM/yyyy"));
         } catch (DateTimeParseException exception) {
             return null;
         }
@@ -163,18 +160,22 @@ public class AadhaarOcrParser {
     /**
      * Extracts gender using three strategies in priority order:
      * <ol>
-     *   <li>Line-by-line scan — finds a line whose sole meaningful token is MALE or FEMALE.</li>
-     *   <li>Regex scan — finds MALE/FEMALE anywhere in the full text (handles same-line DOB+gender).</li>
-     *   <li>Fuzzy fallback — corrects known Tesseract misreads of MALE/FEMALE.</li>
+     * <li>Line-by-line scan — finds a line whose sole meaningful token is MALE or
+     * FEMALE.</li>
+     * <li>Regex scan — finds MALE/FEMALE anywhere in the full text (handles
+     * same-line DOB+gender).</li>
+     * <li>Fuzzy fallback — corrects known Tesseract misreads of MALE/FEMALE.</li>
      * </ol>
      */
     private String extractGender(String text) {
 
         // --- Strategy 1: line-by-line scan ---
-        // Aadhaar cards usually print MALE or FEMALE on its own line (or with DOB on same line).
+        // Aadhaar cards usually print MALE or FEMALE on its own line (or with DOB on
+        // same line).
         String[] lines = text.split("\\R");
         for (String line : lines) {
-            // Strip all non-alpha characters and check if the remaining word is MALE/FEMALE.
+            // Strip all non-alpha characters and check if the remaining word is
+            // MALE/FEMALE.
             String stripped = line.replaceAll("[^A-Za-z]", " ").trim();
             for (String token : stripped.split("\\s+")) {
                 if (token.equalsIgnoreCase("MALE")) {

@@ -16,4 +16,8 @@ public interface ComplaintRepository
         List<Complaint> findByCategoryAndIdNot(
                         String category,
                         UUID complaintId);
+
+        List<Complaint> findByClusterId(UUID clusterId);
+
+        List<Complaint> findByClusterIdOrderByCreatedAtAsc(UUID clusterId);
 }

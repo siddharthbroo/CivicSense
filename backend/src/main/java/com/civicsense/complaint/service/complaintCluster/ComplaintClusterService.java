@@ -1,4 +1,4 @@
-package com.civicsense.complaint.service;
+package com.civicsense.complaint.service.complaintCluster;
 
 import com.civicsense.complaint.entity.Complaint;
 import com.civicsense.complaint.entity.classification.ComplaintCategory;
