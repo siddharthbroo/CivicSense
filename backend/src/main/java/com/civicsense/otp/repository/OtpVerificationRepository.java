@@ -15,8 +15,7 @@ public interface OtpVerificationRepository
         extends JpaRepository<OtpVerification, UUID> {
 
     Optional<OtpVerification>
-    findTopByIdentityVerificationIdAndMobileNumberAndPurposeAndStatusOrderByCreatedAtDesc(
-            UUID identityVerificationId,
+    findTopByMobileNumberAndPurposeAndStatusOrderByCreatedAtDesc(
             String mobileNumber,
             OtpPurpose purpose,
             OtpStatus status
@@ -26,13 +25,11 @@ public interface OtpVerificationRepository
     @Query("""
             UPDATE OtpVerification o
             SET o.status = :newStatus
-            WHERE o.identityVerification.id = :identityVerificationId
-            AND o.mobileNumber = :mobileNumber
+            WHERE o.mobileNumber = :mobileNumber
             AND o.purpose = :purpose
             AND o.status = :currentStatus
             """)
     int updateStatusForActiveOtps(
-            @Param("identityVerificationId") UUID identityVerificationId,
             @Param("mobileNumber") String mobileNumber,
             @Param("purpose") OtpPurpose purpose,
             @Param("currentStatus") OtpStatus currentStatus,

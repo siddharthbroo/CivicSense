@@ -4,6 +4,8 @@ import com.civicsense.complaint.dto.ComplaintResponse;
 import com.civicsense.complaint.dto.CreateComplaintRequest;
 import com.civicsense.complaint.dto.CreateComplaintResponse;
 import com.civicsense.complaint.service.ComplaintService;
+import com.civicsense.complaint.service.geo.LocationValidationResult;
+import com.civicsense.complaint.service.geo.LocationValidationService;
 import com.civicsense.user.entity.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,15 +25,40 @@ import java.util.UUID;
 public class ComplaintController {
 
         private final ComplaintService complaintService;
+        private final LocationValidationService locationValidationService;
+        private final com.civicsense.complaint.service.image.ImageModerationService imageModerationService;
+
+        @PostMapping("/validate-image")
+        public ResponseEntity<com.civicsense.complaint.service.image.ImageModerationResult> validateImage(
+                        @RequestParam("image") MultipartFile image,
+                        @RequestParam(value = "category", required = false) String category,
+                        @RequestParam(value = "description", required = false) String description) {
+
+                com.civicsense.complaint.service.image.ImageModerationResult result =
+                                imageModerationService.validateAndModerate(image, category, description);
+
+                return ResponseEntity.ok(result);
+        }
+
+        @GetMapping("/validate-location")
+        public ResponseEntity<LocationValidationResult> validateLocation(
+                        @RequestParam("latitude") Double latitude,
+                        @RequestParam("longitude") Double longitude,
+                        @RequestParam(value = "category", required = false) String category) {
+
+                LocationValidationResult result = locationValidationService.validateIncidentLocation(
+                                latitude,
+                                longitude,
+                                category);
+
+                return ResponseEntity.ok(result);
+        }
 
         @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         public ResponseEntity<CreateComplaintResponse> createComplaint(
-
                         @AuthenticationPrincipal User user,
-
                         @Valid @ModelAttribute CreateComplaintRequest request,
-
-                        @RequestParam("image") MultipartFile image) {
+                        @RequestParam(value = "image", required = false) MultipartFile image) {
 
                 CreateComplaintResponse response = complaintService.createComplaint(
                                 user.getId(),
@@ -51,5 +78,4 @@ public class ComplaintController {
 
                 return ResponseEntity.ok(complaints);
         }
-
 }

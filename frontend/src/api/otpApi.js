@@ -6,15 +6,13 @@ import { apiRequest } from './api.js'
  * Backend:
  * POST /api/v1/otp/send
  *
- * @param {{identityVerificationId: string, mobileNumber: string}} payload
+ * @param {{mobileNumber: string, purpose?: string}} payload
+ * @returns {Promise<{otpVerificationId: string, expiresAt: string, message: string}>}
  */
-export function sendOtp({ identityVerificationId, mobileNumber }) {
+export function sendOtp({ mobileNumber, purpose = 'REGISTRATION' }) {
   return apiRequest('/otp/send', {
     method: 'POST',
-    body: {
-      identityVerificationId,
-      mobileNumber,
-    },
+    body: { mobileNumber, purpose },
   })
 }
 
@@ -25,27 +23,21 @@ export function sendOtp({ identityVerificationId, mobileNumber }) {
  * POST /api/v1/otp/verify
  *
  * @param {{otpVerificationId: string, otp: string}} payload
+ * @returns {Promise<{verified: boolean, message: string}>}
  */
 export function verifyOtp({ otpVerificationId, otp }) {
   return apiRequest('/otp/verify', {
     method: 'POST',
-    body: {
-      otpVerificationId,
-      otp,
-    },
+    body: { otpVerificationId, otp },
   })
 }
 
 /**
- * Resends OTP using the existing send OTP endpoint.
+ * Resends OTP by calling the send endpoint again.
  *
- * Backend has no separate /resend endpoint.
- *
- * @param {{identityVerificationId: string, mobileNumber: string}} payload
+ * @param {{mobileNumber: string}} payload
+ * @returns {Promise<{otpVerificationId: string, expiresAt: string, message: string}>}
  */
-export function resendOtp({ identityVerificationId, mobileNumber }) {
-  return sendOtp({
-    identityVerificationId,
-    mobileNumber,
-  })
+export function resendOtp({ mobileNumber }) {
+  return sendOtp({ mobileNumber })
 }

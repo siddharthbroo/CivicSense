@@ -34,6 +34,18 @@ public class CommunityController {
         return ResponseEntity.ok(feed);
     }
 
+    @GetMapping("/complaints/nearby")
+    public ResponseEntity<List<CommunityComplaintResponse>> getNearbyComplaints(
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude,
+            @RequestParam(required = false, defaultValue = "5.0") Double radiusKm,
+            @AuthenticationPrincipal User user
+    ) {
+        UUID userId = (user != null) ? user.getId() : null;
+        List<CommunityComplaintResponse> nearby = complaintCommunityService.getNearbyCommunityComplaints(latitude, longitude, radiusKm, userId);
+        return ResponseEntity.ok(nearby);
+    }
+
     @GetMapping("/complaints/{id}")
     public ResponseEntity<CommunityComplaintResponse> getCommunityComplaint(
             @PathVariable UUID id,

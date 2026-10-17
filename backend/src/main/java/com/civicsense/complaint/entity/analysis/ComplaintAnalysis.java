@@ -3,6 +3,7 @@ package com.civicsense.complaint.entity.analysis;
 import com.civicsense.complaint.entity.*;
 import com.civicsense.complaint.entity.classification.ComplaintCategory;
 import com.civicsense.complaint.entity.classification.ComplaintDepartment;
+import com.civicsense.complaint.entity.analysis.EvidenceLevel;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -73,6 +74,29 @@ public class ComplaintAnalysis {
     @Enumerated(EnumType.STRING)
     @Column(name = "recommended_urgency", length = 30)
     private ComplaintSeverity recommendedUrgency;
+
+    /**
+     * Evidence level: E0 (text-only) to E3 (strong corroboration).
+     * Computed deterministically after Gemini M3 analysis.
+     * Does NOT currently affect the risk-score formula.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "evidence_level", length = 5)
+    private EvidenceLevel evidenceLevel;
+
+    /**
+     * Raised when evidenceLevel is E0 (no photo) for any complaint.
+     * This is informational only; it does NOT suspend the complaint.
+     */
+    @Column(name = "low_evidence")
+    private Boolean lowEvidence = false;
+
+    /**
+     * Raised when Gemini reports description-image consistency as INCONSISTENT.
+     * Only set when a photo is present (not applicable for E0 complaints).
+     */
+    @Column(name = "description_image_mismatch")
+    private Boolean descriptionImageMismatch = false;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)

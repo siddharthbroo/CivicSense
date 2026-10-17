@@ -10,9 +10,6 @@ import com.civicsense.user.dto.CreateUserResponse;
 import com.civicsense.user.entity.User;
 import com.civicsense.user.entity.UserStatus;
 import com.civicsense.user.repository.UserRepository;
-import com.civicsense.verification.entity.IdentityVerification;
-import com.civicsense.verification.entity.VerificationStatus;
-import com.civicsense.verification.repository.IdentityVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,121 +24,74 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final OtpVerificationRepository otpVerificationRepository;
-    private final IdentityVerificationRepository identityVerificationRepository;
 
-    private final BCryptPasswordEncoder passwordEncoder =
-            new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
     @Transactional
-    public CreateUserResponse createUser(
-            CreateUserRequest request
-    ) {
+    public CreateUserResponse createUser(CreateUserRequest request) {
 
         // 1. Find the OTP verification record
         OtpVerification otpVerification =
-                otpVerificationRepository.findById(
-                        request.otpVerificationId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "OTP verification not found"
-                        )
-                );
+                otpVerificationRepository.findById(request.otpVerificationId())
+                        .orElseThrow(() -> new RuntimeException("OTP verification not found"));
 
         // 2. OTP must be successfully verified
         if (otpVerification.getStatus() != OtpStatus.VERIFIED) {
-            throw new IllegalStateException(
-                    "OTP must be verified before creating user"
-            );
+            throw new IllegalStateException("OTP must be verified before creating user");
         }
 
-        // 3. Get the identity verification linked to this OTP
-        IdentityVerification identityVerification =
-                otpVerification.getIdentityVerification();
+        // 3. Get the verified mobile number from the OTP record
+        String mobileNumber = otpVerification.getMobileNumber();
 
-        if (identityVerification == null) {
-            throw new IllegalStateException(
-                    "Identity verification not linked to OTP"
-            );
-        }
-
-        // 4. Identity details must have been confirmed by the user
-        if (identityVerification.getVerificationStatus()
-                != VerificationStatus.USER_CONFIRMED) {
-
-            throw new IllegalStateException(
-                    "Identity details have not been confirmed"
-            );
-        }
-
-        // 5. Get the verified mobile number
-        String mobileNumber =
-                otpVerification.getMobileNumber();
-
-        // 6. Prevent duplicate user registration
+        // 4. Prevent duplicate user registration by mobile
         if (userRepository.existsByMobileNumber(mobileNumber)) {
-            throw new IllegalStateException(
-                    "Mobile number is already registered"
-            );
+            throw new IllegalStateException("Mobile number is already registered");
         }
 
-        // 7. Get the default citizen role
-        Role citizenRole =
-                roleRepository.findByName(CITIZEN_ROLE)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "CITIZEN role not found"
-                                )
-                        );
+        // 5. Prevent duplicate registration by email (if provided)
+        if (request.email() != null && userRepository.existsByEmail(request.email())) {
+            throw new IllegalStateException("Email address is already registered");
+        }
 
-        // 8. Create user
+        // 6. Get the default citizen role
+        Role citizenRole = roleRepository.findByName(CITIZEN_ROLE)
+                .orElseThrow(() -> new RuntimeException("CITIZEN role not found"));
+
+        // 7. Build the new user
         User user = new User();
 
-        // Use user-confirmed identity data
-        user.setName(
-                identityVerification.getConfirmedName()
-        );
+        // Name comes from the registration form (passed in CreateUserRequest)
+        user.setName(request.name() != null ? request.name() : "Citizen");
 
-        // Use mobile number whose OTP was verified
+        // Mobile from the OTP-verified record — guaranteed authentic
         user.setMobileNumber(mobileNumber);
 
-        // Hash password before storing
-        user.setPasswordHash(
-                passwordEncoder.encode(request.password())
-        );
+        // Email stored but no OTP sent for it
+        user.setEmail(request.email());
+
+        // Hash password before storing — never store plaintext
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
 
         user.setStatus(UserStatus.ACTIVE);
         user.setMobileVerified(true);
 
         /*
-         * Current registration flow has user-confirmed
-         * identity data, but not external/government
-         * identity verification.
+         * Identity (Aadhaar OCR) is no longer part of the registration flow.
+         * identityVerified is false until a future ID-verification step is added.
          */
-        user.setIdentityVerified(true);
+        user.setIdentityVerified(false);
 
         // Assign default citizen role
         user.getRoles().add(citizenRole);
 
-        // 9. Save user
-        User savedUser =
-                userRepository.save(user);
+        // 8. Save user
+        User savedUser = userRepository.save(user);
 
-        // 10. Link identity verification to the new user
-        identityVerification.setUser(savedUser);
-
-        identityVerificationRepository.save(
-                identityVerification
-        );
-
-        // 11. Link OTP verification to the new user
+        // 9. Link the OTP verification record to the new user
         otpVerification.setUser(savedUser);
+        otpVerificationRepository.save(otpVerification);
 
-        otpVerificationRepository.save(
-                otpVerification
-        );
-
-        // 12. Return registration result
         return new CreateUserResponse(
                 savedUser.getId(),
                 savedUser.getName(),

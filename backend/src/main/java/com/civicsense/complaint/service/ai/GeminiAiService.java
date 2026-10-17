@@ -17,7 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,18 +33,6 @@ public class GeminiAiService {
         public String analyzeComplaint(
                         Complaint complaint,
                         ComplaintImage complaintImage) {
-
-                // 1. Download image from ImageKit
-                byte[] imageBytes = restClient
-                                .get()
-                                .uri(complaintImage.getImageUrl())
-                                .retrieve()
-                                .body(byte[].class);
-
-                if (imageBytes == null || imageBytes.length == 0) {
-                        throw new IllegalStateException(
-                                        "Unable to download complaint image");
-                }
 
                 String categories = Arrays.stream(ComplaintCategory.values())
                                 .map(Enum::name)
@@ -64,8 +54,26 @@ public class GeminiAiService {
                                 .map(Enum::name)
                                 .collect(Collectors.joining(", "));
 
-                // 2. Prepare prompt
-                String prompt = """
+                // Check if photo is present
+                boolean hasImage = complaintImage != null && complaintImage.getImageUrl() != null && !complaintImage.getImageUrl().isBlank();
+
+                byte[] imageBytes = null;
+                if (hasImage) {
+                        try {
+                                imageBytes = restClient
+                                                .get()
+                                                .uri(complaintImage.getImageUrl())
+                                                .retrieve()
+                                                .body(byte[].class);
+                        } catch (Exception e) {
+                                System.out.println("Could not download image from storage: " + e.getMessage());
+                                hasImage = false;
+                        }
+                }
+
+                String prompt;
+                if (hasImage && imageBytes != null && imageBytes.length > 0) {
+                        prompt = """
                                 Analyze this civic complaint using BOTH the
                                 complaint description and the uploaded image.
 
@@ -172,24 +180,120 @@ public class GeminiAiService {
                                 severities,
                                 severities,
                                 severities);
+                } else {
+                        // Text-only analysis when no photo was uploaded
+                        prompt = """
+                                Analyze this civic complaint using the complaint description.
+                                No photo was provided for this complaint (text-only submission).
 
-                // 3. Create multimodal content
-                Content content = Content.fromParts(
-                                Part.fromText(prompt),
-                                Part.fromBytes(
-                                                imageBytes,
-                                                complaintImage.getContentType()));
+                                Complaint description:
+                                %s
 
-                // 4. Send to Gemini
+                                Analyze:
+
+                                1. Detect the language.
+                                2. Generate a short, clear complaint title.
+                                3. Classify the complaint category.
+                                4. Determine severity.
+                                5. Create a short summary.
+                                6. Recommend the responsible civic department.
+                                7. Give a confidence score between 0 and 1.
+                                8. Assess the overall safety risk based on description.
+                                9. Determine whether there is an immediate hazard requiring urgent attention.
+                                10. Assess the public impact on citizens, students, and commuters.
+                                11. Explain the potential harm that could occur if left unaddressed.
+                                12. Recommend the response urgency.
+
+                                CATEGORY:
+                                The category MUST be exactly ONE of:
+                                %s
+
+                                SEVERITY:
+                                The severity MUST be exactly ONE of:
+                                %s
+
+                                DEPARTMENT:
+                                The department MUST be exactly ONE of:
+                                %s
+
+                                SAFETY RISK:
+                                The safetyRisk MUST be exactly ONE of:
+                                %s
+
+                                IMMEDIATE HAZARD:
+                                The immediateHazard MUST be a boolean: true or false.
+
+                                PUBLIC IMPACT:
+                                The publicImpact MUST be exactly ONE of:
+                                %s
+
+                                POTENTIAL HARM:
+                                A concise 1-2 sentence explanation of potential harm to people, vehicles, or property.
+
+                                RECOMMENDED URGENCY:
+                                The recommendedUrgency MUST be exactly ONE of:
+                                %s
+
+                                IMPORTANT:
+                                - Do not create new category values.
+                                - Do not create new severity values.
+                                - Do not create new department values.
+                                - Do not create new safetyRisk values.
+                                - Do not create new publicImpact values.
+                                - Do not create new recommendedUrgency values.
+                                - Use the values exactly as provided.
+                                - Set imageAuthenticity to "NOT_APPLICABLE" (no image submitted).
+                                - Set descriptionImageConsistency to "NOT_APPLICABLE" (no image submitted).
+                                - confidence must be a number between 0 and 1.
+                                - immediateHazard must be boolean true or false.
+                                - Return ONLY valid JSON.
+                                - Do not wrap the JSON in markdown or code fences.
+                                - title must be concise and describe the main civic issue (5 to 10 words).
+
+                                Required JSON fields:
+
+                                language
+                                title
+                                category
+                                severity
+                                summary
+                                department
+                                confidence
+                                imageAuthenticity
+                                descriptionImageConsistency
+                                safetyRisk
+                                immediateHazard
+                                publicImpact
+                                potentialHarm
+                                recommendedUrgency
+                                """.formatted(
+                                complaint.getDescription(),
+                                categories,
+                                severities,
+                                departments,
+                                severities,
+                                severities,
+                                severities);
+                }
+
+                Content content;
+                if (hasImage && imageBytes != null && imageBytes.length > 0) {
+                        content = Content.fromParts(
+                                        Part.fromText(prompt),
+                                        Part.fromBytes(
+                                                        imageBytes,
+                                                        complaintImage.getContentType() != null ? complaintImage.getContentType() : "image/jpeg"));
+                } else {
+                        content = Content.fromParts(Part.fromText(prompt));
+                }
+
                 GenerateContentResponse response = geminiClient.models.generateContent(
                                 "gemini-3.6-flash",
                                 content,
                                 GenerateContentConfig.builder()
-                                                .responseMimeType(
-                                                                "application/json")
+                                                .responseMimeType("application/json")
                                                 .build());
 
-                // 5. Return Gemini's JSON response
                 return response.text();
         }
 
@@ -207,31 +311,24 @@ public class GeminiAiService {
                         double addressSimilarity,
                         double distanceMeters) {
 
-                // 1. Download first complaint image
-                byte[] imageBytes1 = restClient
-                                .get()
-                                .uri(image1.getImageUrl())
-                                .retrieve()
-                                .body(byte[].class);
-
-                if (imageBytes1 == null || imageBytes1.length == 0) {
-                        throw new IllegalStateException(
-                                        "Unable to download first complaint image");
+                byte[] imageBytes1 = null;
+                if (image1 != null && image1.getImageUrl() != null && !image1.getImageUrl().isBlank()) {
+                        try {
+                                imageBytes1 = restClient.get().uri(image1.getImageUrl()).retrieve().body(byte[].class);
+                        } catch (Exception e) {
+                                System.out.println("Could not download image1: " + e.getMessage());
+                        }
                 }
 
-                // 2. Download second complaint image
-                byte[] imageBytes2 = restClient
-                                .get()
-                                .uri(image2.getImageUrl())
-                                .retrieve()
-                                .body(byte[].class);
-
-                if (imageBytes2 == null || imageBytes2.length == 0) {
-                        throw new IllegalStateException(
-                                        "Unable to download second complaint image");
+                byte[] imageBytes2 = null;
+                if (image2 != null && image2.getImageUrl() != null && !image2.getImageUrl().isBlank()) {
+                        try {
+                                imageBytes2 = restClient.get().uri(image2.getImageUrl()).retrieve().body(byte[].class);
+                        } catch (Exception e) {
+                                System.out.println("Could not download image2: " + e.getMessage());
+                        }
                 }
 
-                // 3. Prepare verification prompt
                 String prompt = """
                                 Determine whether these two civic complaints
                                 represent the SAME real-world civic incident
@@ -285,58 +382,7 @@ public class GeminiAiService {
                                 that the complaints represent the same incident.
 
                                 You must independently evaluate the complaints
-                                and BOTH images before making the final decision.
-
-
-                                ==============================
-                                VISUAL VERIFICATION
-                                ==============================
-
-                                You will receive two images:
-
-                                IMAGE 1 belongs to Complaint 1.
-                                IMAGE 2 belongs to Complaint 2.
-
-                                Carefully compare BOTH images.
-
-                                Consider:
-
-                                - Whether both images show the same physical civic issue.
-                                - Visual surroundings and background.
-                                - Buildings, roads, walls, poles and landmarks.
-                                - Vehicles, containers, signs and other identifiable objects.
-                                - Shape, size and appearance of the reported issue.
-                                - Whether the physical environment appears to be the same.
-                                - Whether the images could have been captured at
-                                  different times at the same location.
-                                - Whether the descriptions refer to the same physical incident.
-                                - Whether the addresses and coordinates are consistent.
-                                - Whether the complaints could instead represent
-                                  two separate issues of the same category.
-
-
-                                ==============================
-                                IMPORTANT DISTINCTION
-                                ==============================
-
-                                Distinguish between:
-
-                                1. Same type of civic issue
-                                2. Same real-world civic incident
-
-                                Your task is specifically to determine
-                                whether they represent the SAME real-world incident.
-
-                                For example:
-
-                                Two garbage piles in the same neighborhood
-                                are NOT necessarily the same incident.
-
-                                Two potholes on the same road
-                                are NOT necessarily the same incident.
-
-                                Similar category, similar wording, nearby coordinates,
-                                or high embedding similarity alone are NOT sufficient.
+                                and any available images before making the final decision.
 
 
                                 ==============================
@@ -366,10 +412,6 @@ public class GeminiAiService {
 
                                 Return a number between 0 and 1.
 
-                                Confidence must represent your confidence in the
-                                final verdict, not merely the similarity of the
-                                complaints.
-
 
                                 ==============================
                                 REASONING
@@ -378,24 +420,13 @@ public class GeminiAiService {
                                 Provide concise reasoning explaining the main
                                 evidence behind the verdict.
 
-                                Specifically mention important visual differences
-                                or similarities when relevant.
-
 
                                 ==============================
                                 OUTPUT
                                 ==============================
 
-                                IMPORTANT:
-
-                                - Do not invent information.
-                                - Do not assume nearby locations mean the same incident.
-                                - Do not assume similar descriptions mean the same incident.
-                                - Do not assume similar categories mean the same incident.
-                                - Do not blindly follow Stage 1.
-                                - Independently inspect both images.
-                                - Return ONLY valid JSON.
-                                - Do not wrap the JSON in markdown or code fences.
+                                Return ONLY valid JSON.
+                                Do not wrap the JSON in markdown or code fences.
 
                                 Required JSON fields:
 
@@ -404,27 +435,22 @@ public class GeminiAiService {
                                 reasoning
 
                                 """.formatted(
-                                // Complaint 1
                                 complaint1.getTitle(),
                                 complaint1.getDescription(),
                                 analysis1.getSummary(),
-                                analysis1.getCategory() != null ? analysis1.getCategory().name()
-                                                : complaint1.getCategory(),
+                                analysis1.getCategory() != null ? analysis1.getCategory().name() : complaint1.getCategory(),
                                 complaint1.getAddress(),
                                 complaint1.getLatitude(),
                                 complaint1.getLongitude(),
 
-                                // Complaint 2
                                 complaint2.getTitle(),
                                 complaint2.getDescription(),
                                 analysis2.getSummary(),
-                                analysis2.getCategory() != null ? analysis2.getCategory().name()
-                                                : complaint2.getCategory(),
+                                analysis2.getCategory() != null ? analysis2.getCategory().name() : complaint2.getCategory(),
                                 complaint2.getAddress(),
                                 complaint2.getLatitude(),
                                 complaint2.getLongitude(),
 
-                                // Stage 1 evidence
                                 titleSimilarity,
                                 descriptionSimilarity,
                                 summarySimilarity,
@@ -432,33 +458,28 @@ public class GeminiAiService {
                                 addressSimilarity,
                                 distanceMeters);
 
-                // 4. Create multimodal content
-                Content content = Content.fromParts(
-                                Part.fromText(prompt),
+                List<Part> parts = new ArrayList<>();
+                parts.add(Part.fromText(prompt));
 
-                                Part.fromText(
-                                                "IMAGE FOR COMPLAINT 1:"),
-                                Part.fromBytes(
-                                                imageBytes1,
-                                                image1.getContentType()),
+                if (imageBytes1 != null && imageBytes1.length > 0 && image1 != null) {
+                        parts.add(Part.fromText("IMAGE FOR COMPLAINT 1:"));
+                        parts.add(Part.fromBytes(imageBytes1, image1.getContentType() != null ? image1.getContentType() : "image/jpeg"));
+                }
 
-                                Part.fromText(
-                                                "IMAGE FOR COMPLAINT 2:"),
-                                Part.fromBytes(
-                                                imageBytes2,
-                                                image2.getContentType()));
+                if (imageBytes2 != null && imageBytes2.length > 0 && image2 != null) {
+                        parts.add(Part.fromText("IMAGE FOR COMPLAINT 2:"));
+                        parts.add(Part.fromBytes(imageBytes2, image2.getContentType() != null ? image2.getContentType() : "image/jpeg"));
+                }
 
-                // 5. Send request to Gemini
+                Content content = Content.fromParts(parts.toArray(new Part[0]));
+
                 GenerateContentResponse response = geminiClient.models.generateContent(
                                 "gemini-3.6-flash",
                                 content,
                                 GenerateContentConfig.builder()
-                                                .responseMimeType(
-                                                                "application/json")
+                                                .responseMimeType("application/json")
                                                 .build());
 
-                // 6. Return Gemini verification result
                 return response.text();
         }
-
 }

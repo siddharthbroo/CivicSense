@@ -2,6 +2,7 @@ package com.civicsense.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -11,17 +12,27 @@ import java.time.LocalDateTime;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
     public ResponseEntity<ErrorResponse> handleValidationErrors(
-            MethodArgumentNotValidException exception
+            Exception exception
     ) {
 
-        String message = exception.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .findFirst()
-                .map(error -> error.getDefaultMessage())
-                .orElse("Invalid request");
+        String message = "Invalid request";
+        if (exception instanceof MethodArgumentNotValidException manve) {
+            message = manve.getBindingResult()
+                    .getFieldErrors()
+                    .stream()
+                    .findFirst()
+                    .map(error -> error.getDefaultMessage())
+                    .orElse("Invalid request");
+        } else if (exception instanceof BindException be) {
+            message = be.getBindingResult()
+                    .getFieldErrors()
+                    .stream()
+                    .findFirst()
+                    .map(error -> error.getDefaultMessage())
+                    .orElse("Invalid request");
+        }
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
@@ -90,6 +101,21 @@ public class GlobalExceptionHandler {
                         400,
                         "Bad Request",
                         exception.getMessage()
+                ));
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException exception
+    ) {
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(
+                        LocalDateTime.now(),
+                        403,
+                        "Forbidden",
+                        exception.getMessage() != null ? exception.getMessage() : "Access denied"
                 ));
     }
 

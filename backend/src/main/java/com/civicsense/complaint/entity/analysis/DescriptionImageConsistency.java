@@ -4,5 +4,7 @@ public enum DescriptionImageConsistency {
 
     CONSISTENT,
     INCONSISTENT,
-    UNCERTAIN
+    UNCERTAIN,
+    /** No image was submitted; description-image consistency is not applicable. */
+    NOT_APPLICABLE
 }

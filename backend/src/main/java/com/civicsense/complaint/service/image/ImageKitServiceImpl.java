@@ -19,16 +19,26 @@ public class ImageKitServiceImpl implements ImageKitService {
     public ImageUploadResult uploadImage(
             MultipartFile image
     ) {
-
         try {
+            return uploadImage(image.getBytes(), image.getOriginalFilename());
+        } catch (IOException exception) {
+            throw new RuntimeException(
+                    "Failed to read image file",
+                    exception
+            );
+        }
+    }
 
-            byte[] imageBytes =
-                    image.getBytes();
-
+    @Override
+    public ImageUploadResult uploadImage(
+            byte[] imageBytes,
+            String fileName
+    ) {
+        try {
             FileUploadParams params =
                     FileUploadParams.builder()
                             .file(imageBytes)
-                            .fileName(image.getOriginalFilename())
+                            .fileName(fileName != null ? fileName : "complaint_image.jpg")
                             .build();
 
             FileUploadResponse response =
@@ -42,11 +52,9 @@ public class ImageKitServiceImpl implements ImageKitService {
                             () -> new RuntimeException("ImageKit did not return file ID")
                     )
             );
-
-        } catch (IOException exception) {
-
+        } catch (Exception exception) {
             throw new RuntimeException(
-                    "Failed to read image file",
+                    "Failed to upload image to ImageKit: " + exception.getMessage(),
                     exception
             );
         }

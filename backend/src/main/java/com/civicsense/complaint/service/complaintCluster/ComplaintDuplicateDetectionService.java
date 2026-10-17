@@ -272,6 +272,10 @@ public class ComplaintDuplicateDetectionService {
          * ==========================================
          */
 
+        // hasImageComparison is true only when BOTH complaints have an image.
+        boolean hasImageComparison =
+                newComplaintImage != null && candidateComplaintImage != null;
+
         double score =
                 scoringService.calculateCombinedScore(
                         textSimilarity.title_similarity(),
@@ -280,7 +284,8 @@ public class ComplaintDuplicateDetectionService {
                         imageSimilarity,
                         addressSimilarity,
                         distanceMeters,
-                        hasAddressComparison
+                        hasAddressComparison,
+                        hasImageComparison
                 );
 
         /*

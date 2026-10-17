@@ -2,6 +2,7 @@ package com.civicsense.complaint.service.community;
 
 import com.civicsense.complaint.dto.community.ComplaintCommunityResponse;
 import com.civicsense.complaint.entity.Complaint;
+import com.civicsense.complaint.entity.analysis.ComplaintAnalysis;
 import com.civicsense.complaint.entity.cluster.ComplaintCluster;
 import com.civicsense.complaint.entity.community.ComplaintCommunity;
 import com.civicsense.complaint.entity.community.ComplaintSupport;
@@ -19,7 +20,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.civicsense.complaint.dto.community.CorroborationIntelligence;
+import com.civicsense.complaint.dto.community.CommunityComplaintResponse;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -43,13 +47,22 @@ class ComplaintCommunityServiceTest {
     private ComplaintCommunityRepository complaintCommunityRepository;
 
     @Mock
+    private com.civicsense.complaint.repository.ComplaintCommentRepository complaintCommentRepository;
+
+    @Mock
     private com.civicsense.complaint.repository.ComplaintImageRepository complaintImageRepository;
+
+    @Mock
+    private com.civicsense.complaint.repository.ComplaintAnalysisRepository complaintAnalysisRepository;
 
     @Mock
     private com.civicsense.complaint.repository.RiskAssessmentRepository riskAssessmentRepository;
 
     @Mock
     private CitizenCorroborationService citizenCorroborationService;
+
+    @Mock
+    private com.civicsense.complaint.service.priority.RiskAssessmentService riskAssessmentService;
 
     @InjectMocks
     private ComplaintCommunityServiceImpl communityService;
@@ -112,6 +125,25 @@ class ComplaintCommunityServiceTest {
         ArgumentCaptor<ComplaintCommunity> communityCaptor = ArgumentCaptor.forClass(ComplaintCommunity.class);
         verify(complaintCommunityRepository, times(1)).save(communityCaptor.capture());
         assertEquals(1L, communityCaptor.getValue().getSupportCount());
+    }
+
+    @Test
+    @DisplayName("Support recalculates the existing M5 assessment using corroboration")
+    void testSupportRecalculatesRiskAssessment() {
+        ComplaintAnalysis analysis = new ComplaintAnalysis();
+
+        when(complaintRepository.findById(complaintId)).thenReturn(Optional.of(complaint));
+        when(userRepository.findById(userAId)).thenReturn(Optional.of(userA));
+        when(complaintSupportRepository.existsByComplaintIdAndUserId(complaintId, userAId)).thenReturn(false);
+        when(complaintSupportRepository.countByComplaintId(complaintId)).thenReturn(1L);
+        when(complaintCommunityRepository.findByComplaintId(complaintId)).thenReturn(Optional.empty());
+        when(complaintCommunityRepository.save(any(ComplaintCommunity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(complaintAnalysisRepository.findByComplaintId(complaintId)).thenReturn(Optional.of(analysis));
+
+        communityService.supportComplaint(complaintId, userAId);
+
+        verify(riskAssessmentService).assess(complaint, analysis);
     }
 
     @Test
@@ -235,5 +267,52 @@ class ComplaintCommunityServiceTest {
         assertFalse(response.supportedByCurrentUser());
         verify(complaintSupportRepository, times(1)).delete(support);
     }
-}
 
+    @Test
+    @DisplayName("7. Nearby complaints returns complaints within radius and excludes far ones")
+    void testGetNearbyCommunityComplaints() {
+        Complaint nearbyComplaint = new Complaint();
+        nearbyComplaint.setId(UUID.randomUUID());
+        nearbyComplaint.setTitle("Nearby Pothole");
+        nearbyComplaint.setLatitude(28.5494);
+        nearbyComplaint.setLongitude(77.2001);
+
+        Complaint farComplaint = new Complaint();
+        farComplaint.setId(UUID.randomUUID());
+        farComplaint.setTitle("Far Complaint");
+        farComplaint.setLatitude(28.7041); // ~20km away in North Delhi
+        farComplaint.setLongitude(77.1025);
+
+        when(complaintRepository.findAll()).thenReturn(List.of(nearbyComplaint, farComplaint));
+        when(citizenCorroborationService.analyzeComplaintCorroboration(any()))
+                .thenReturn(new CorroborationIntelligence(
+                        UUID.randomUUID(), UUID.randomUUID(),
+                        1, 1, 0L, 0L, false, 0,
+                        LocalDateTime.now(), LocalDateTime.now(), 0.0
+                ));
+
+        // Search near Hauz Khas (28.5500, 77.2000) with 3km radius
+        List<CommunityComplaintResponse> results =
+                communityService.getNearbyCommunityComplaints(28.5500, 77.2000, 3.0, userAId);
+
+        assertEquals(1, results.size());
+        assertEquals("Nearby Pothole", results.get(0).title());
+    }
+
+    @Test
+    @DisplayName("8. Nearby complaints falls back to feed when coordinates are null")
+    void testGetNearbyCommunityComplaints_NullCoordinates() {
+        when(complaintRepository.findAll()).thenReturn(List.of(complaint));
+        when(citizenCorroborationService.analyzeComplaintCorroboration(any()))
+                .thenReturn(new CorroborationIntelligence(
+                        UUID.randomUUID(), UUID.randomUUID(),
+                        1, 1, 0L, 0L, false, 0,
+                        LocalDateTime.now(), LocalDateTime.now(), 0.0
+                ));
+
+        List<CommunityComplaintResponse> results =
+                communityService.getNearbyCommunityComplaints(null, null, 5.0, userAId);
+
+        assertEquals(1, results.size());
+    }
+}

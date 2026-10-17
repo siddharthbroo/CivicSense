@@ -1,16 +1,16 @@
 import { apiRequest } from './api.js'
 
 /**
- * Completes registration once mobile number has been verified via OTP.
+ * Creates the citizen account after successful OTP verification.
  *
- * Backend: POST /users/register (application/json)
+ * Backend: POST /api/v1/users/register
  *
- * @param {{otpVerificationId: string, password: string}} payload
- * @returns {Promise<{userId:string, name:string, mobileNumber:string, role:string, status:string, message:string}>}
+ * @param {{otpVerificationId: string, name: string, email: string, password: string}} payload
+ * @returns {Promise<{userId: string, name: string, mobileNumber: string, role: string, status: string, message: string}>}
  */
-export function registerUser({ otpVerificationId, password }) {
+export function registerUser({ otpVerificationId, name, email, password }) {
   return apiRequest('/users/register', {
     method: 'POST',
-    body: { otpVerificationId, password },
+    body: { otpVerificationId, name, email, password },
   })
 }

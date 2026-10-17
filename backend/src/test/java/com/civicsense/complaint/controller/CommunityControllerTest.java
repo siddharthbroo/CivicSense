@@ -7,7 +7,7 @@ import com.civicsense.complaint.entity.Complaint;
 import com.civicsense.complaint.entity.ComplaintStatus;
 import com.civicsense.complaint.entity.cluster.ComplaintCluster;
 import com.civicsense.complaint.entity.cluster.ComplaintPriority;
-import com.civicsense.complaint.exception.GlobalExceptionHandler;
+import com.civicsense.exception.GlobalExceptionHandler;
 import com.civicsense.complaint.service.community.CitizenCorroborationService;
 import com.civicsense.complaint.service.community.ComplaintCommunityService;
 import com.civicsense.exception.ResourceNotFoundException;
@@ -109,6 +109,22 @@ class CommunityControllerTest {
                 .andExpect(jsonPath("$[0].priority").value("HIGH"))
                 .andExpect(jsonPath("$[0].commentCount").value(0))
                 .andExpect(jsonPath("$[0].supportedByCurrentUser").value(false));
+    }
+
+    @Test
+    @DisplayName("1b. Nearby complaints endpoint returns matching complaints")
+    void testNearbyComplaintsEndpoint() throws Exception {
+        CommunityComplaintResponse sample = createSampleResponse(false);
+        when(complaintCommunityService.getNearbyCommunityComplaints(eq(28.55), eq(77.20), eq(5.0), eq(null)))
+                .thenReturn(List.of(sample));
+
+        mockMvc.perform(get("/api/v1/community/complaints/nearby")
+                        .param("latitude", "28.55")
+                        .param("longitude", "77.20")
+                        .param("radiusKm", "5.0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].complaintId").value(complaintId.toString()))
+                .andExpect(jsonPath("$[0].title").value("Deep Pothole on 5th Ave"));
     }
 
     @Test

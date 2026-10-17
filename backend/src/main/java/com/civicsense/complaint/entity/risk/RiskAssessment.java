@@ -46,6 +46,19 @@ public class RiskAssessment {
     @Column(nullable = false, length = 20)
     private ComplaintPriority priority;
 
+    /**
+     * True if field/officer verification is required before automated resolution.
+     * Evaluated by VerificationGateService after M5 risk assessment.
+     */
+    @Column(name = "verification_required")
+    private Boolean verificationRequired = false;
+
+    /**
+     * Explainable reason if verification is required (e.g. HIGH_SEVERITY_LOW_EVIDENCE, SUSPICIOUS_FLAGS, NORMAL_FLOW).
+     */
+    @Column(name = "verification_reason", length = 500)
+    private String verificationReason;
+
     @Column(nullable = false)
     private LocalDateTime computedAt;
 

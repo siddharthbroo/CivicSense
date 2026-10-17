@@ -19,6 +19,8 @@ public interface ComplaintCommunityService {
 
     List<CommunityComplaintResponse> getCommunityFeed(ComplaintStatus status, String sort, UUID currentUserId);
 
+    List<CommunityComplaintResponse> getNearbyCommunityComplaints(Double latitude, Double longitude, Double radiusKm, UUID currentUserId);
+
     boolean hasUserSupported(UUID complaintId, UUID userId);
 
     long getSupportCount(UUID complaintId);

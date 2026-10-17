@@ -5,9 +5,16 @@ import com.civicsense.complaint.entity.analysis.ComplaintAnalysis;
 import com.civicsense.complaint.entity.analysis.ComplaintSeverity;
 import com.civicsense.complaint.entity.cluster.ComplaintPriority;
 import com.civicsense.complaint.entity.risk.RiskAssessment;
+import com.civicsense.complaint.entity.image.ComplaintImage;
+import com.civicsense.complaint.repository.ComplaintImageRepository;
 import com.civicsense.complaint.repository.RiskAssessmentRepository;
+import com.civicsense.complaint.service.community.CitizenCorroborationService;
+import com.civicsense.complaint.service.verification.VerificationDecision;
+import com.civicsense.complaint.service.verification.VerificationGateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +29,9 @@ public class RiskAssessmentServiceImpl
     private final RiskAssessmentRepository riskAssessmentRepository;
     private final LocationRiskService locationRiskService;
     private final InfrastructureRiskService infrastructureRiskService;
+    private final VerificationGateService verificationGateService;
+    private final ComplaintImageRepository complaintImageRepository;
+    private final CitizenCorroborationService citizenCorroborationService;
 
     @Override
     public RiskAssessment assess(
@@ -29,10 +39,13 @@ public class RiskAssessmentServiceImpl
             ComplaintAnalysis analysis
     ) {
 
-        RiskAssessment assessment =
-                new RiskAssessment();
+        RiskAssessment assessment = complaint.getId() == null
+                ? new RiskAssessment()
+                : riskAssessmentRepository.findByComplaintId(complaint.getId())
+                        .orElseGet(RiskAssessment::new);
 
         assessment.setComplaint(complaint);
+        assessment.setComputedAt(LocalDateTime.now());
 
         // 1. Severity Risk
         double severityScore =
@@ -88,25 +101,43 @@ public class RiskAssessmentServiceImpl
                 riskScore
         );
 
-        // 6. Determine priority
+        // 6. Determine priority (UNTOUCHED: priority is calculated strictly by risk score)
         ComplaintPriority priority =
                 determinePriority(riskScore);
 
         assessment.setPriority(priority);
 
-        // 7. Save only after all required fields are calculated
+        // 7. Verification Gate: exceptional routing check
+        // Rule: High-severity/risk + low evidence, or suspicious flags -> verificationRequired = true
+        // Priority is preserved and never downgraded.
+        ComplaintImage complaintImage = complaintImageRepository
+                .findTopByComplaintIdOrderByCreatedAtDesc(complaint.getId())
+                .orElse(null);
+
+        VerificationDecision decision = verificationGateService.evaluate(
+                analysis,
+                assessment,
+                complaintImage
+        );
+
+        assessment.setVerificationRequired(decision.verificationRequired());
+        assessment.setVerificationReason(decision.reason());
+
+        // 8. Save only after all required fields are calculated
         RiskAssessment savedAssessment =
                 riskAssessmentRepository.save(
                         assessment
                 );
 
         System.out.println("===== RISK ASSESSMENT =====");
-        System.out.println("Severity Risk       = " + severityScore);
-        System.out.println("Corroboration Risk  = " + corroborationScore);
-        System.out.println("Location Risk       = " + locationRiskScore);
-        System.out.println("Infrastructure Risk = " + infrastructureRiskScore);
-        System.out.println("Final Risk Score    = " + riskScore);
-        System.out.println("Priority            = " + priority);
+        System.out.println("Severity Risk         = " + severityScore);
+        System.out.println("Corroboration Risk    = " + corroborationScore);
+        System.out.println("Location Risk         = " + locationRiskScore);
+        System.out.println("Infrastructure Risk   = " + infrastructureRiskScore);
+        System.out.println("Final Risk Score      = " + riskScore);
+        System.out.println("Priority              = " + priority);
+        System.out.println("Verification Required = " + decision.verificationRequired());
+        System.out.println("Verification Reason   = " + decision.reason());
         System.out.println("===========================");
 
         return savedAssessment;
@@ -132,18 +163,9 @@ public class RiskAssessmentServiceImpl
             Complaint complaint
     ) {
 
-        if (complaint.getCluster() == null
-                || complaint.getCluster().getComplaintCount() == null) {
-            return 0.0;
-        }
-
-        int complaintCount =
-                complaint.getCluster().getComplaintCount();
-
-        return Math.min(
-                complaintCount / 5.0,
-                1.0
-        ) * 100.0;
+        return citizenCorroborationService
+                .analyzeComplaintCorroboration(complaint)
+                .corroborationScore();
     }
 
     private double calculateFinalRiskScore(

@@ -5,6 +5,7 @@ const OTP_LENGTH = 6
 /**
  * Six-box OTP entry. Keeps a single string value in the parent and
  * handles per-box focus movement, backspace, and paste.
+ * Responsive across small mobile (320px) to desktop.
  */
 export default function OtpInput({ value, onChange, disabled, error }) {
   const inputRefs = useRef([])
@@ -46,7 +47,7 @@ export default function OtpInput({ value, onChange, disabled, error }) {
   return (
     <div>
       <span className="field-label">Enter the 6-digit code</span>
-      <div className="flex gap-2" onPaste={handlePaste}>
+      <div className="grid grid-cols-6 gap-1.5 sm:gap-2.5 max-w-sm mx-auto" onPaste={handlePaste}>
         {digits.map((digit, index) => (
           <input
             key={index}
@@ -58,13 +59,13 @@ export default function OtpInput({ value, onChange, disabled, error }) {
             inputMode="numeric"
             maxLength={1}
             aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
-            className={`input-field h-12 w-11 text-center text-lg font-semibold ${
+            className={`input-field h-12 w-full p-0 text-center text-lg sm:text-xl font-bold font-mono transition-all duration-150 focus:scale-[1.03] ${
               error ? 'input-field-error' : ''
             }`}
           />
         ))}
       </div>
-      {error && <p className="field-error">{error}</p>}
+      {error && <p className="field-error text-center mt-2">{error}</p>}
     </div>
   )
 }

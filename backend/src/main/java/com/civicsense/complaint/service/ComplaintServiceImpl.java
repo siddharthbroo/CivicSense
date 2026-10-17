@@ -18,6 +18,9 @@ import com.civicsense.complaint.service.ai.GeminiAiService;
 import com.civicsense.complaint.service.complaintCluster.ComplaintClusterService;
 import com.civicsense.complaint.service.complaintCluster.ComplaintDuplicateDetectionService;
 import com.civicsense.complaint.service.complaintCluster.ComplaintDuplicateScoringService;
+import com.civicsense.complaint.service.geo.GeographicHierarchyService;
+import com.civicsense.complaint.service.image.ExifMetadata;
+import com.civicsense.complaint.service.image.ExifMetadataExtractorService;
 import com.civicsense.complaint.service.image.ImageKitService;
 import com.civicsense.complaint.service.image.ImageUploadResult;
 import com.civicsense.complaint.service.priority.RiskAssessmentService;
@@ -47,6 +50,11 @@ public class ComplaintServiceImpl implements ComplaintService {
         private final GeminiAiService geminiAiService;
         private final ObjectMapper objectMapper;
         private final RiskAssessmentService riskAssessmentService;
+        private final ExifMetadataExtractorService exifMetadataExtractorService;
+        private final GeographicHierarchyService geographicHierarchyService;
+        private final com.civicsense.complaint.service.geo.LocationValidationService locationValidationService;
+        private final com.civicsense.complaint.service.image.ImageModerationService imageModerationService;
+        private final com.civicsense.complaint.service.image.ImageReuseDetectionService imageReuseDetectionService;
 
         @Override
         @Transactional
@@ -55,17 +63,18 @@ public class ComplaintServiceImpl implements ComplaintService {
                         CreateComplaintRequest request,
                         MultipartFile image) {
 
-                // 1. Image is mandatory
-                if (image == null || image.isEmpty()) {
-                        throw new IllegalArgumentException(
-                                        "Complaint image is required");
-                }
+                // 1. Authoritative backend validation of incident coordinates & supported service area
+                locationValidationService.validateOrThrow(
+                                request.latitude(),
+                                request.longitude(),
+                                null
+                );
 
                 // 2. Find logged-in user
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-                // 3. Create complaint
+                // 3. Create complaint with citizen-confirmed map pin as PRIMARY incident location
                 Complaint complaint = new Complaint();
 
                 complaint.setUser(user);
@@ -73,36 +82,117 @@ public class ComplaintServiceImpl implements ComplaintService {
                 complaint.setLatitude(request.latitude());
                 complaint.setLongitude(request.longitude());
                 complaint.setAddress(request.address());
+
+                // Device telemetry (optional hint/suggestion only; never overrides confirmed pin)
+                complaint.setDeviceLatitude(request.deviceLatitude());
+                complaint.setDeviceLongitude(request.deviceLongitude());
+                complaint.setLocationSource(request.locationSource() != null ? request.locationSource() : "MANUAL_PIN");
+                complaint.setLocationAccuracy(request.locationAccuracy());
+
+                // Resolve Delhi NCR Administrative Ward based strictly on the confirmed map pin
+                geographicHierarchyService.resolveWard(request.latitude(), request.longitude())
+                                .ifPresent(complaint::setWard);
+
                 complaint.setStatus(ComplaintStatus.SUBMITTED);
 
-                // 4. Save complaint
+                // 3. Save complaint
                 Complaint savedComplaint = complaintRepository.save(complaint);
 
-                // 5. Upload image to ImageKit
-                ImageUploadResult uploadResult = imageKitService.uploadImage(image);
+                // 4. Handle optional image upload: file validation, content moderation, fail-safe quarantine & EXIF stripping
+                ComplaintImage complaintImage = null;
+                if (image != null && !image.isEmpty()) {
+                        // Validate file type, size, magic bytes, and decodability
+                        var fileValidation = imageModerationService.validateFileIntegrity(image);
+                        if (!fileValidation.valid()) {
+                                throw new IllegalArgumentException("Invalid image: " + fileValidation.reason());
+                        }
 
-                // 6. Create image record
-                ComplaintImage complaintImage = new ComplaintImage();
+                        byte[] rawBytes;
+                        try {
+                                rawBytes = image.getBytes();
+                        } catch (Exception e) {
+                                throw new IllegalArgumentException("Failed to read image bytes: " + e.getMessage());
+                        }
 
-                complaintImage.setComplaint(savedComplaint);
-                complaintImage.setImageUrl(
-                                uploadResult.imageUrl());
-                complaintImage.setStorageKey(
-                                uploadResult.storageKey());
-                complaintImage.setContentType(
-                                image.getContentType());
+                        // Evaluate content safety AND complaint relevance via Gemini pre-screen
+                        var moderationResult = imageModerationService.evaluateImageSafetyAndRelevance(
+                                        rawBytes,
+                                        image.getContentType(),
+                                        null,
+                                        request.description());
 
-                // 7. Save image reference
-                complaintImageRepository.save(complaintImage);
+                        // If high-confidence prohibited: REJECT immediately. Do NOT upload or send to Gemini analysis.
+                        if (moderationResult.prohibited()) {
+                                throw new IllegalArgumentException("Uploaded image violates safety policies: " + moderationResult.reason());
+                        }
 
-                // 8. Analyze complaint using Gemini
+                        // If clearly unrelated: REJECT immediately.
+                        if (moderationResult.unrelated()) {
+                                throw new IllegalArgumentException("Uploaded image is unrelated to the complaint: " + moderationResult.reason());
+                        }
+
+                        // Extract EXIF metadata server-side (supporting hint only; not exposed publicly)
+                        ExifMetadata exif = exifMetadataExtractorService.extractMetadata(
+                                        image,
+                                        request.latitude(),
+                                        request.longitude());
+
+                        // If quarantined (uncertain / moderation service failure), do NOT publish to cloud storage or send to Gemini
+                        if (moderationResult.quarantined()) {
+                                System.err.println("Complaint image quarantined: " + moderationResult.reason());
+                                // Quarantine mode: Complaint created cleanly, image withheld from normal processing/public storage
+                        } else {
+                                // Image is SAFE: Safely strip EXIF metadata before public upload
+                                byte[] safeBytes = exifMetadataExtractorService.stripExifMetadata(
+                                                rawBytes,
+                                                image.getContentType());
+
+                                // Upload stripped image to cloud storage
+                                ImageUploadResult uploadResult = imageKitService.uploadImage(
+                                                safeBytes,
+                                                image.getOriginalFilename());
+
+                                complaintImage = new ComplaintImage();
+                                complaintImage.setComplaint(savedComplaint);
+                                complaintImage.setImageUrl(uploadResult.imageUrl());
+                                complaintImage.setStorageKey(uploadResult.storageKey());
+                                complaintImage.setContentType(image.getContentType());
+
+                                // Attach EXIF metadata
+                                complaintImage.setExifLatitude(exif.latitude());
+                                complaintImage.setExifLongitude(exif.longitude());
+                                complaintImage.setExifTimestamp(exif.timestamp());
+                                complaintImage.setHasExifGps(exif.hasGps());
+                                complaintImage.setExifDistanceMeters(exif.distanceMetersToPin());
+                                complaintImage.setExifLocationMismatch(exif.locationMismatchFlag());
+
+                                // Detect image reuse & calculate SHA-256 + perceptual dHash
+                                var reuseResult = imageReuseDetectionService.detectReuse(
+                                                rawBytes,
+                                                user.getId(),
+                                                request.latitude(),
+                                                request.longitude(),
+                                                savedComplaint.getId()
+                                );
+
+                                complaintImage.setImageHash(reuseResult.imageHash());
+                                complaintImage.setPerceptualHash(reuseResult.perceptualHash());
+                                complaintImage.setImageReused(reuseResult.reused());
+                                complaintImage.setImageReuseType(reuseResult.reuseType());
+                                complaintImage.setImageReuseSuspicious(reuseResult.suspicious());
+
+                                complaintImageRepository.save(complaintImage);
+                        }
+                }
+
+                // 5. Analyze complaint using Gemini (multimodal if image present, text-only if no photo)
                 AiAnalysisResult aiAnalysisResult = aiAnalysisService.analyze(
                                 savedComplaint,
                                 complaintImage);
 
                 if (aiAnalysisResult != null) {
 
-                        // 9. Save Gemini generated title and category
+                        // 6. Save Gemini generated title and category
                         savedComplaint.setTitle(
                                         aiAnalysisResult.title());
                         if (aiAnalysisResult.category() != null) {
@@ -112,14 +202,14 @@ public class ComplaintServiceImpl implements ComplaintService {
 
                         complaintRepository.save(savedComplaint);
 
-                        // 10. Get saved AI analysis
+                        // 7. Get saved AI analysis
                         ComplaintAnalysis analysis = complaintAnalysisRepository
                                         .findByComplaintId(
                                                         savedComplaint.getId())
                                         .orElseThrow(() -> new RuntimeException(
                                                         "Complaint analysis not found"));
 
-                        // 11. Detect duplicate complaints
+                        // 8. Detect duplicate complaints
                         ComplaintDuplicateDetectionService.DuplicateDetectionResult duplicateResult;
                         try {
                                 duplicateResult = duplicateDetectionService.detectDuplicates(
@@ -151,7 +241,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                         /*
                          * ==========================================
                          * CANDIDATE DUPLICATE (DUPLICATE / POTENTIAL_DUPLICATE)
-                         * All candidates undergo Stage-2 Gemini visual verification
+                         * All candidates undergo Stage-2 Gemini verification
                          * ==========================================
                          */
 
@@ -174,14 +264,13 @@ public class ComplaintServiceImpl implements ComplaintService {
                                                 .orElseThrow(() -> new RuntimeException(
                                                                 "Matched complaint analysis not found"));
 
-                                // Get matched complaint's latest image
+                                // Get matched complaint's latest image (may be null if text-only)
                                 ComplaintImage matchedImage = complaintImageRepository
                                                 .findTopByComplaintIdOrderByCreatedAtDesc(
                                                                 duplicateResult
                                                                                 .matchedComplaint()
                                                                                 .getId())
-                                                .orElseThrow(() -> new RuntimeException(
-                                                                "Image for matched complaint not found"));
+                                                .orElse(null);
 
                                 // Get Stage-1 text similarity evidence
                                 ComplaintTextSimilarityResponse textSimilarity = duplicateResult.textSimilarity();
@@ -364,7 +453,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                                         "Initial AI analysis failed. New complaint cluster created as fallback.");
                 }
 
-                // 12. Return response
+                // 9. Return response
                 return new CreateComplaintResponse(
                                 savedComplaint.getId(),
                                 savedComplaint.getStatus(),

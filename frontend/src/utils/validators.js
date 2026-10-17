@@ -10,6 +10,28 @@ export function isValidPassword(value) {
   return value.length >= 8
 }
 
+export function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+/**
+ * Validates the full name field, returning an error string or ''.
+ */
+export function validateName(value) {
+  if (!isRequired(value)) return 'Full name is required.'
+  if (String(value).trim().length < 2) return 'Name must be at least 2 characters.'
+  return ''
+}
+
+/**
+ * Validates the email field, returning an error string or ''.
+ */
+export function validateEmail(value) {
+  if (!isRequired(value)) return 'Email address is required.'
+  if (!isValidEmail(value)) return 'Enter a valid email address.'
+  return ''
+}
+
 /**
  * Validates the mobile number field, returning an error string or ''.
  */

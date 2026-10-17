@@ -28,7 +28,7 @@ function readStoredUser() {
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => getStoredToken())
   const [user, setUser] = useState(() => readStoredUser())
-  const [isInitializing, setIsInitializing] = useState(false)
+  const [isInitializing] = useState(false)
 
   const isAuthenticated = Boolean(token)
 

@@ -24,6 +24,17 @@ public record CreateComplaintRequest(
                 max = 500,
                 message = "Address must not exceed 500 characters"
         )
-        String address
+        String address,
+
+        Double deviceLatitude,
+
+        Double deviceLongitude,
+
+        String locationSource,
+
+        Double locationAccuracy
 ) {
+    public CreateComplaintRequest(String description, Double latitude, Double longitude, String address) {
+        this(description, latitude, longitude, address, null, null, null, null);
+    }
 }

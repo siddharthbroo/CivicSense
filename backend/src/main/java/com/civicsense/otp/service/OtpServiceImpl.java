@@ -1,5 +1,6 @@
 package com.civicsense.otp.service;
 
+import com.civicsense.exception.ResourceNotFoundException;
 import com.civicsense.otp.dto.SendOtpRequest;
 import com.civicsense.otp.dto.SendOtpResponse;
 import com.civicsense.otp.dto.VerifyOtpRequest;
@@ -8,9 +9,7 @@ import com.civicsense.otp.entity.OtpPurpose;
 import com.civicsense.otp.entity.OtpStatus;
 import com.civicsense.otp.entity.OtpVerification;
 import com.civicsense.otp.repository.OtpVerificationRepository;
-import com.civicsense.verification.entity.IdentityVerification;
-import com.civicsense.verification.entity.VerificationStatus;
-import com.civicsense.verification.repository.IdentityVerificationRepository;
+import com.civicsense.otp.service.delivery.OtpDeliveryProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,244 +27,109 @@ public class OtpServiceImpl implements OtpService {
     private static final int MAX_ATTEMPTS = 5;
 
     private final OtpVerificationRepository otpVerificationRepository;
-    private final IdentityVerificationRepository identityVerificationRepository;
     private final OtpHasher otpHasher;
+    private final OtpDeliveryProvider otpDeliveryProvider;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
     @Transactional
-    public SendOtpResponse sendOtp(
-            SendOtpRequest request
-    ) {
+    public SendOtpResponse sendOtp(SendOtpRequest request) {
 
-        // 1. Find the identity verification process
-        IdentityVerification verification =
-                identityVerificationRepository.findById(
-                        request.identityVerificationId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Identity verification not found"
-                        )
-                );
-
-        // 2. Identity details must have been confirmed first
-        if (verification.getVerificationStatus()
-                != VerificationStatus.USER_CONFIRMED) {
-
-            throw new IllegalStateException(
-                    "Identity details must be confirmed before requesting OTP"
-            );
-        }
+        OtpPurpose purpose = request.purpose() != null
+                ? request.purpose()
+                : OtpPurpose.REGISTRATION;
 
         /*
-         * 3. Invalidate all previously active OTPs
-         * for this identity verification and mobile number.
-         *
-         * This is important when the user clicks "Resend OTP".
-         * The old OTP must no longer be usable.
+         * Invalidate all previously active OTPs for this mobile + purpose.
+         * This handles the "Resend OTP" case — the old OTP becomes unusable.
          */
         otpVerificationRepository.updateStatusForActiveOtps(
-                request.identityVerificationId(),
                 request.mobileNumber(),
-                OtpPurpose.REGISTRATION,
+                purpose,
                 OtpStatus.PENDING,
                 OtpStatus.EXPIRED
         );
 
-        // 4. Generate secure 6-digit OTP
+        // Generate secure 6-digit OTP
         String otp = generateOtp();
 
-        // 5. Hash OTP before storing it
+        // Hash OTP before storing — never store plaintext
         String otpHash = otpHasher.hash(otp);
 
-        // 6. Set expiry time
-        LocalDateTime expiresAt =
-                LocalDateTime.now()
-                        .plusMinutes(OTP_EXPIRY_MINUTES);
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
 
-        // 7. Create OTP record
-        OtpVerification otpVerification =
-                new OtpVerification();
-
-        otpVerification.setIdentityVerification(
-                verification
-        );
-
-        otpVerification.setMobileNumber(
-                request.mobileNumber()
-        );
-
-        otpVerification.setOtpHash(
-                otpHash
-        );
-
-        otpVerification.setPurpose(
-                OtpPurpose.REGISTRATION
-        );
-
-        otpVerification.setStatus(
-                OtpStatus.PENDING
-        );
-
-        otpVerification.setExpiresAt(
-                expiresAt
-        );
-
+        OtpVerification otpVerification = new OtpVerification();
+        otpVerification.setMobileNumber(request.mobileNumber());
+        otpVerification.setOtpHash(otpHash);
+        otpVerification.setPurpose(purpose);
+        otpVerification.setStatus(OtpStatus.PENDING);
+        otpVerification.setExpiresAt(expiresAt);
         otpVerification.setAttemptCount(0);
 
-        // 8. Save OTP
-        OtpVerification savedOtp =
-                otpVerificationRepository.save(
-                        otpVerification
-                );
+        OtpVerification savedOtp = otpVerificationRepository.save(otpVerification);
 
-        // 9. Development only
-        System.out.println(
-                "========================================"
-        );
-        System.out.println(
-                "Development OTP: " + otp
-        );
-        System.out.println(
-                "OTP Verification ID: " + savedOtp.getId()
-        );
-        System.out.println(
-                "Expires At: " + expiresAt
-        );
-        System.out.println(
-                "========================================"
-        );
+        // Deliver OTP via the configured provider (development=log, sms=gateway)
+        otpDeliveryProvider.sendOtp(request.mobileNumber(), otp, expiresAt);
 
-        // 10. Never return actual OTP in API response
         return new SendOtpResponse(
                 savedOtp.getId(),
                 savedOtp.getExpiresAt(),
-                "OTP generated successfully"
+                "OTP sent successfully"
         );
     }
 
     @Override
     @Transactional
-    public VerifyOtpResponse verifyOtp(
-            VerifyOtpRequest request
-    ) {
+    public VerifyOtpResponse verifyOtp(VerifyOtpRequest request) {
 
-        // 1. Find OTP verification record
         OtpVerification otpVerification =
-                otpVerificationRepository.findById(
-                        request.otpVerificationId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "OTP verification not found"
-                        )
-                );
+                otpVerificationRepository.findById(request.otpVerificationId())
+                        .orElseThrow(() -> new ResourceNotFoundException("OTP verification not found"));
 
-        // 2. OTP must still be pending
-        if (otpVerification.getStatus()
-                != OtpStatus.PENDING) {
-
-            return new VerifyOtpResponse(
-                    false,
-                    "OTP is no longer active"
-            );
+        // OTP must still be pending
+        if (otpVerification.getStatus() != OtpStatus.PENDING) {
+            return new VerifyOtpResponse(false, "OTP is no longer active");
         }
 
-        // 3. Check whether OTP has expired
-        if (LocalDateTime.now()
-                .isAfter(otpVerification.getExpiresAt())) {
-
-            otpVerification.setStatus(
-                    OtpStatus.EXPIRED
-            );
-
-            otpVerificationRepository.save(
-                    otpVerification
-            );
-
-            return new VerifyOtpResponse(
-                    false,
-                    "OTP has expired"
-            );
+        // Check expiry
+        if (LocalDateTime.now().isAfter(otpVerification.getExpiresAt())) {
+            otpVerification.setStatus(OtpStatus.EXPIRED);
+            otpVerificationRepository.save(otpVerification);
+            return new VerifyOtpResponse(false, "OTP has expired");
         }
 
-        // 4. Check maximum attempts
-        if (otpVerification.getAttemptCount()
-                >= MAX_ATTEMPTS) {
-
-            otpVerification.setStatus(
-                    OtpStatus.FAILED
-            );
-
-            otpVerificationRepository.save(
-                    otpVerification
-            );
-
-            return new VerifyOtpResponse(
-                    false,
-                    "Maximum OTP attempts exceeded"
-            );
+        // Check maximum attempts
+        if (otpVerification.getAttemptCount() >= MAX_ATTEMPTS) {
+            otpVerification.setStatus(OtpStatus.FAILED);
+            otpVerificationRepository.save(otpVerification);
+            return new VerifyOtpResponse(false, "Maximum OTP attempts exceeded");
         }
 
-        // 5. Increase attempt count
-        otpVerification.setAttemptCount(
-                otpVerification.getAttemptCount() + 1
-        );
+        // Increment attempt count
+        otpVerification.setAttemptCount(otpVerification.getAttemptCount() + 1);
 
-        // 6. Compare entered OTP with stored hash
-        boolean matches =
-                otpHasher.matches(
-                        request.otp(),
-                        otpVerification.getOtpHash()
-                );
+        // Compare entered OTP with stored hash
+        boolean matches = otpHasher.matches(request.otp(), otpVerification.getOtpHash());
 
-        // 7. Wrong OTP
         if (!matches) {
-
-            if (otpVerification.getAttemptCount()
-                    >= MAX_ATTEMPTS) {
-
-                otpVerification.setStatus(
-                        OtpStatus.FAILED
-                );
+            if (otpVerification.getAttemptCount() >= MAX_ATTEMPTS) {
+                otpVerification.setStatus(OtpStatus.FAILED);
             }
-
-            otpVerificationRepository.save(
-                    otpVerification
-            );
-
-            return new VerifyOtpResponse(
-                    false,
-                    "Invalid OTP"
-            );
+            otpVerificationRepository.save(otpVerification);
+            return new VerifyOtpResponse(false, "Invalid OTP");
         }
 
-        // 8. Correct OTP
-        otpVerification.setStatus(
-                OtpStatus.VERIFIED
-        );
+        // Correct OTP — mark as verified
+        otpVerification.setStatus(OtpStatus.VERIFIED);
+        otpVerification.setVerifiedAt(LocalDateTime.now());
+        otpVerificationRepository.save(otpVerification);
 
-        otpVerification.setVerifiedAt(
-                LocalDateTime.now()
-        );
-
-        otpVerificationRepository.save(
-                otpVerification
-        );
-
-        return new VerifyOtpResponse(
-                true,
-                "OTP verified successfully"
-        );
+        return new VerifyOtpResponse(true, "OTP verified successfully");
     }
 
     private String generateOtp() {
-
-        int otp =
-                secureRandom.nextInt(
-                        OTP_MAX - OTP_MIN + 1
-                ) + OTP_MIN;
-
+        int otp = secureRandom.nextInt(OTP_MAX - OTP_MIN + 1) + OTP_MIN;
         return String.valueOf(otp);
     }
 }

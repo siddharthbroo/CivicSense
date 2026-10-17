@@ -140,8 +140,8 @@ export default function ComplaintList({
       {/* Complaint Cards */}
       {filteredComplaints.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
-          {filteredComplaints.map((complaint) => (
-            <ComplaintCard key={complaint.id || Math.random()} complaint={complaint} />
+          {filteredComplaints.map((complaint, index) => (
+            <ComplaintCard key={complaint.id || index} complaint={complaint} />
           ))}
         </div>
       ) : complaints.length === 0 ? (

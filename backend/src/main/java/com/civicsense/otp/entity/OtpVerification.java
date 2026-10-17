@@ -1,7 +1,6 @@
 package com.civicsense.otp.entity;
 
 import com.civicsense.user.entity.User;
-import com.civicsense.verification.entity.IdentityVerification;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,7 +11,15 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "otp_verifications")
+@Table(
+        name = "otp_verifications",
+        indexes = {
+                @Index(
+                        name = "idx_otp_mobile_purpose_status",
+                        columnList = "mobile_number, purpose, status"
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -33,11 +40,10 @@ public class OtpVerification {
     private User user;
 
     /*
-     * Links this OTP to the current identity verification/registration flow.
+     * NOTE: identity_verification_id column is intentionally removed from this
+     * entity. The column may still exist in the database (ddl-auto=update will
+     * not drop it). It can be removed via a manual migration if desired.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "identity_verification_id", nullable = false)
-    private IdentityVerification identityVerification;
 
     @Column(name = "mobile_number", nullable = false)
     private String mobileNumber;

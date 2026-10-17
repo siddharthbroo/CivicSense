@@ -80,7 +80,7 @@ export default function Login() {
           disabled={isSubmitting}
         />
 
-        <button type="submit" className="btn-primary w-full" disabled={isSubmitting}>
+        <button type="submit" className="btn-primary w-full min-h-[44px] touch-target" disabled={isSubmitting}>
           {isSubmitting && <Spinner size={16} />}
           {isSubmitting ? 'Logging in…' : 'Log in'}
         </button>
@@ -88,7 +88,7 @@ export default function Login() {
 
       <p className="mt-6 text-center text-sm text-slate-500">
         New to CivicSense?{' '}
-        <Link to="/register/identity" className="font-semibold text-teal-700 hover:text-teal-800">
+        <Link to="/register" className="font-semibold text-teal-700 hover:text-teal-800">
           Create an account
         </Link>
       </p>

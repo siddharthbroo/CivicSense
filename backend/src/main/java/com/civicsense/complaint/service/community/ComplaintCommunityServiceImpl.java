@@ -8,13 +8,16 @@ import com.civicsense.complaint.entity.ComplaintStatus;
 import com.civicsense.complaint.entity.community.ComplaintCommunity;
 import com.civicsense.complaint.entity.community.ComplaintSupport;
 import com.civicsense.complaint.entity.image.ComplaintImage;
-import com.civicsense.complaint.repository.ComplaintCommunityRepository;
 import com.civicsense.complaint.repository.ComplaintImageRepository;
+import com.civicsense.complaint.repository.ComplaintAnalysisRepository;
 import com.civicsense.complaint.repository.ComplaintRepository;
 import com.civicsense.complaint.entity.cluster.ComplaintPriority;
 import com.civicsense.complaint.entity.risk.RiskAssessment;
+import com.civicsense.complaint.repository.ComplaintCommentRepository;
+import com.civicsense.complaint.repository.ComplaintCommunityRepository;
 import com.civicsense.complaint.repository.ComplaintSupportRepository;
 import com.civicsense.complaint.repository.RiskAssessmentRepository;
+import com.civicsense.complaint.service.priority.RiskAssessmentService;
 import com.civicsense.exception.ResourceNotFoundException;
 import com.civicsense.user.entity.User;
 import com.civicsense.user.repository.UserRepository;
@@ -37,9 +40,12 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
     private final UserRepository userRepository;
     private final ComplaintSupportRepository complaintSupportRepository;
     private final ComplaintCommunityRepository complaintCommunityRepository;
+    private final ComplaintCommentRepository complaintCommentRepository;
     private final ComplaintImageRepository complaintImageRepository;
+    private final ComplaintAnalysisRepository complaintAnalysisRepository;
     private final RiskAssessmentRepository riskAssessmentRepository;
     private final CitizenCorroborationService citizenCorroborationService;
+    private final RiskAssessmentService riskAssessmentService;
 
     @Override
     @Transactional
@@ -63,6 +69,8 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
         long totalSupports = complaintSupportRepository.countByComplaintId(complaintId);
         community.setSupportCount(totalSupports);
         community = complaintCommunityRepository.save(community);
+
+        recalculateRiskAssessment(complaint);
 
         return new ComplaintCommunityResponse(
                 complaintId,
@@ -93,6 +101,8 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
         long totalSupports = complaintSupportRepository.countByComplaintId(complaintId);
         community.setSupportCount(totalSupports);
         community = complaintCommunityRepository.save(community);
+
+        recalculateRiskAssessment(complaint);
 
         return new ComplaintCommunityResponse(
                 complaintId,
@@ -172,6 +182,38 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
 
     @Override
     @Transactional(readOnly = true)
+    public List<CommunityComplaintResponse> getNearbyCommunityComplaints(Double latitude, Double longitude, Double radiusKm, UUID currentUserId) {
+        if (latitude == null || longitude == null) {
+            return getCommunityFeed(null, "RECENT", currentUserId);
+        }
+
+        double effectiveRadiusKm = (radiusKm != null && radiusKm > 0) ? Math.min(radiusKm, 50.0) : 5.0; // Default 5km, capped at 50km
+
+        List<Complaint> allComplaints = complaintRepository.findAll();
+
+        List<CommunityComplaintResponse> nearby = allComplaints.stream()
+                .filter(c -> c.getLatitude() != null && c.getLongitude() != null)
+                .filter(c -> calculateHaversineDistanceKm(latitude, longitude, c.getLatitude(), c.getLongitude()) <= effectiveRadiusKm)
+                .sorted(Comparator.comparingDouble(c -> calculateHaversineDistanceKm(latitude, longitude, c.getLatitude(), c.getLongitude())))
+                .map(c -> toCommunityComplaintResponse(c, currentUserId))
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        return nearby;
+    }
+
+    private double calculateHaversineDistanceKm(double lat1, double lon1, double lat2, double lon2) {
+        final double EARTH_RADIUS_KM = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return EARTH_RADIUS_KM * c;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean hasUserSupported(UUID complaintId, UUID userId) {
         if (complaintId == null || userId == null) {
             return false;
@@ -188,6 +230,11 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
         return complaintCommunityRepository.findByComplaintId(complaintId)
                 .map(ComplaintCommunity::getSupportCount)
                 .orElseGet(() -> complaintSupportRepository.countByComplaintId(complaintId));
+    }
+
+    private void recalculateRiskAssessment(Complaint complaint) {
+        complaintAnalysisRepository.findByComplaintId(complaint.getId())
+                .ifPresent(analysis -> riskAssessmentService.assess(complaint, analysis));
     }
 
     private CommunityComplaintResponse toCommunityComplaintResponse(Complaint complaint, UUID currentUserId) {
@@ -218,7 +265,7 @@ public class ComplaintCommunityServiceImpl implements ComplaintCommunityService 
                 priority,
                 complaint.getStatus(),
                 corroboration.supportCount(),
-                0L, // commentCount
+                complaintCommentRepository.countByComplaintId(complaint.getId()),
                 corroboration.totalReports(),
                 corroboration.uniqueCitizens(),
                 corroboration.recurring(),

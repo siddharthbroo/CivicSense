@@ -143,12 +143,12 @@ export default function CivicGuidelines() {
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {emergencyContacts.map((contact) => (
             <a
               key={contact.name}
               href={`tel:${contact.tel}`}
-              className="group flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-center transition-all hover:border-teal-400 hover:bg-teal-50/40 active:scale-95"
+              className="group flex flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 text-center transition-all hover:border-teal-400 hover:bg-teal-50/40 active:scale-95 touch-target"
             >
               <div>
                 <span className="block text-[11px] font-medium text-slate-600 truncate">
